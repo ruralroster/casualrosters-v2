@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rural Rosters - Shift Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #2c3e50;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1a252f;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        /* Login Screen */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: white;
+        }
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .login-card h2 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 20px;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            display: none;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .tab-button.active {
+            color: #2c3e50;
+            border-bottom-color: #2c3e50;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            padding: 20px;
+            border-radius: 4px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .tab-content h3 {
+            margin-bottom: 15px;
+        }
+
+        .tab-content p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        /* Messages */
+        .message {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Shift Item */
+        .shift-item {
+            background: #f9f9f9;
+            border-left: 4px solid #000;
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 4px;
+        }
+
+        .shift-item.red {
+            border-left-color: #dc3545;
+            background: #ffe6e6;
+        }
+
+        .shift-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .shift-item-header strong {
+            font-size: 16px;
+        }
+
+        .shift-item-meta {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .shift-item-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Approvals Table */
+        .approvals-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .approvals-table th {
+            background: #f0f0f0;
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            font-weight: 600;
+        }
+
+        .approvals-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .approvals-table tr:hover {
+            background: #f9f9f9;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+
+        .location-list {
+            margin: 20px 0;
+        }
+
+        .location-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 12px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .location-item:hover {
+            background: #f9f9f9;
+        }
+
+        .location-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .location-item label {
+            cursor: pointer;
+            margin-bottom: 0;
+            flex: 1;
+        }
+
+        .color-key {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .color-key-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .color-key-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="loginScreen" class="login-container">
+    <div class="login-card">
+        <h2>Rural Rosters</h2>
+        <p id="loadingText" style="color: #999; font-size: 14px; margin-bottom: 20px;">Connecting...</p>
+        <input type="email" id="emailInput" class="login-input" placeholder="Email address">
+        <input type="password" id="passwordInput" class="login-input" placeholder="Password" onkeypress="if(event.key==='Enter') loginWithEmail()">
+        <button class="btn-primary login-button" onclick="loginWithEmail()">Login</button>
+    </div>
+</div>
+
+<!-- Main Dashboard -->
+<div id="mainDashboard" class="dashboard">
+    <div class="container">
+        <header>
+            <h1>Rural Rosters</h1>
+            <div class="user-info">
+                <span id="userNameDisplay"></span>
+                <button class="btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div id="messageContainer"></div>
+
+        <div class="tabs" id="tabsContainer">
+            <!-- Tabs dynamically inserted here -->
+        </div>
+
+        <!-- Tabs Content Dynamically Inserted -->
+        <div id="tabsContent">
+            <!-- Tab content dynamically inserted here -->
+        </div>
+    </div>
+</div>
+
+<script>
+    let BACKEND_URL = 'https://ruralrostersproxy-staging-168129620374.australia-southeast1.run.app;
+    
+    window.addEventListener('load', async function() {
+        document.getElementById('loadingText').style.display = 'none';
+    });
+    
+    // HTTP fetch-based API shim
+    const google = {
+        script: {
+            run: {
+                withSuccessHandler: function(callback) {
+                    return {
+                        checkUserExists: async (email, password) => {
+                            const result = await callBackend('checkUserExists', {email, password});
+                            if (callback) callback(result);
+                        },
+                        getStaffAvailableShifts: async (email) => {
+                            const result = await callBackend('getStaffAvailableShifts', {email});
+                            if (callback) callback(result);
+                        },
+                        getMarketplaceListings: async (email) => {
+                            const result = await callBackend('getMarketplaceListings', {email});
+                            if (callback) callback(result);
+                        },
+                        requestShifts: async (email, name, shifts) => {
+                            const result = await callBackend('requestShifts', {email, name, shifts});
+                            if (callback) callback(result);
+                        },
+                        listShiftForSwap: async (email, name, date, jobType, location, isServiceDisruption) => {
+                            const result = await callBackend('listShiftForSwap', {email, name, date, jobType, location, isServiceDisruption});
+                            if (callback) callback(result);
+                        },
+                        claimShift: async (claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) => {
+                            const result = await callBackend('claimShift', {claimingEmail, claimingName, originalEmail, originalName, date, jobType, location});
+                            if (callback) callback(result);
+                        }
+                    };
+                }
+            }
+        }
+    };
+    
+    async function callBackend(action, params) {
+        if (!BACKEND_URL) {
+            console.error('Backend URL not loaded');
+            return { error: 'Backend not ready' };
+        }
+        
+        try {
+            const response = await fetch(BACKEND_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action, params})
+            });
+            return await response.json();
+        } catch(err) {
+            console.error('Backend error:', err);
+            return { error: err.toString() };
+        }
+    }
+    
+    // ========== APPLICATION CODE ==========
+    
+    let currentUser = null;
+    let userRole = null;
+    let userLocations = [];
+    let allShifts = [];
+    let marketplaceListings = [];
+    const allLocations = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
+
+    function loginWithEmail() {
+        const email = document.getElementById('emailInput').value.trim().toLowerCase();
+        const password = document.getElementById('passwordInput').value;
+        
+        if (!email || !password) {
+            showMessage('Please enter both email and password', 'error');
+            return;
+        }
+
+        google.script.run.withSuccessHandler(function(user) {
+            if (user && user.error) {
+                showMessage(user.error, 'error');
+                return;
+            }
+            if (user) {
+                currentUser = { email: user.email, name: user.name };
+                userRole = user.role;
+                userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
+                showDashboard();
+            }
+        }).checkUserExists(email, password);
+    }
+
+    function showDashboard() {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainDashboard').style.display = 'block';
+        document.getElementById('userNameDisplay').textContent = currentUser.name || currentUser.email;
+        
+        setupTabs();
+        loadInitialData();
+    }
+
+    function setupTabs() {
+        const tabsContainer = document.getElementById('tabsContainer');
+        const tabsContent = document.getElementById('tabsContent');
+        
+        tabsContainer.innerHTML = '';
+        tabsContent.innerHTML = '';
+
+        if (userRole === 'Officer') {
+            // Officer tabs (placeholder for now)
+            tabsContainer.innerHTML = `
+                <button class="tab-button active" onclick="switchTab(0, this)">My Vacancies</button>
+            `;
+            tabsContent.innerHTML = `
+                <div id="tab-0" class="tab-content active">
+                    <h3>My Vacancies</h3>
+                    <p>Officer functionality coming soon</p>
+                </div>
+            `;
+        } else {
+            // Staff tabs
+            tabsContainer.innerHTML = `
+                <button class="tab-button active" onclick="switchTab(0, this)">Available Shifts</button>
+                <button class="tab-button" onclick="switchTab(1, this)">List Shift for Swap</button>
+                <button class="tab-button" onclick="switchTab(2, this)">Settings</button>
+            `;
+            
+            tabsContent.innerHTML = `
+                <div id="tab-0" class="tab-content active">
+                    <h3>Available Shifts & Marketplace</h3>
+                    <button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button>
+                    <div class="color-key">
+                        <div class="color-key-item">
+                            <div class="color-key-dot" style="background: #000;"></div>
+                            <span>Routine shifts</span>
+                        </div>
+                        <div class="color-key-item">
+                            <div class="color-key-dot" style="background: #dc3545;"></div>
+                            <span>Service-disruption shifts (PRIORITY)</span>
+                        </div>
+                    </div>
+                    <div id="shiftsContainer"></div>
+                </div>
+                <div id="tab-1" class="tab-content">
+                    <h3>List Shift for Swap</h3>
+                    <p>Offer a shift you want to swap</p>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="swapDate" />
+                    </div>
+                    <div class="form-group">
+                        <label>Location</label>
+                        <select id="swapLocation">
+                            <option value="">Select Location</option>
+                            <option value="Innisfail">Innisfail</option>
+                            <option value="Mareeba">Mareeba</option>
+                            <option value="Tully">Tully</option>
+                            <option value="Yarrabah">Yarrabah</option>
+                            <option value="Atherton">Atherton</option>
+                            <option value="Mossman">Mossman</option>
+                            <option value="Babinda">Babinda</option>
+                            <option value="Cairns">Cairns</option>
+                            <option value="Telehealth">Telehealth</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Job Type</label>
+                        <input type="text" id="swapJobType" placeholder="e.g., RFDS Night, ED Day" />
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="swapIsServiceDisruption" />
+                        <label for="swapIsServiceDisruption">This is a service-disruption shift (check if critical)</label>
+                    </div>
+                    <button class="btn-primary" onclick="submitListShift()">List Shift for Swap</button>
+                </div>
+                <div id="tab-2" class="tab-content">
+                    <h3>Settings</h3>
+                    <h4 style="margin-bottom: 15px;">Work Location Preferences</h4>
+                    <div class="location-list" id="locationList"></div>
+                    <button class="btn-primary" onclick="saveSettings()" style="margin-top: 20px;">Save Settings</button>
+                </div>
+            `;
+        }
+    }
+
+    function switchTab(idx, btn) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + idx).classList.add('active');
+        btn.classList.add('active');
+        
+        // Refresh available shifts when switching back to tab 0
+        if (idx === 0 && userRole !== 'Officer') {
+            loadAvailableShifts();
+        }
+    }
+
+    function showMessage(text, type) {
+        const container = document.getElementById('messageContainer');
+        const messageEl = document.createElement('div');
+        messageEl.className = 'message ' + type;
+        messageEl.textContent = text;
+        container.innerHTML = '';
+        container.appendChild(messageEl);
+        setTimeout(() => { if (messageEl.parentNode) messageEl.remove(); }, 5000);
+    }
+
+    function loadInitialData() {
+        if (userRole === 'Officer') {
+            // Officer data loading
+        } else {
+            loadAvailableShifts();
+            loadSettingsScreen();
+        }
+    }
+
+    function loadAvailableShifts() {
+        showMessage('Loading shifts...', 'info');
+        
+        google.script.run.withSuccessHandler(function(shifts) {
+            allShifts = shifts || [];
+            
+            // Also load marketplace
+            google.script.run.withSuccessHandler(function(marketplace) {
+                marketplaceListings = marketplace || [];
+                renderAllShifts();
+            }).getMarketplaceListings(currentUser.email);
+        }).getStaffAvailableShifts(currentUser.email);
+    }
+
+    function renderAllShifts() {
+        const container = document.getElementById('shiftsContainer');
+        
+        // Combine available shifts and marketplace listings
+        const allItems = [];
+        
+        // Add available shifts
+        (allShifts || []).forEach(shift => {
+            allItems.push({
+                type: 'available',
+                date: shift.date,
+                jobType: shift.jobType,
+                location: shift.location,
+                isServiceDisruption: false
+            });
+        });
+        
+        // Add marketplace listings
+        (marketplaceListings || []).forEach(listing => {
+            allItems.push({
+                type: 'marketplace',
+                date: listing.date,
+                jobType: listing.jobType,
+                location: listing.location,
+                originalEmail: listing.originalEmail,
+                originalName: listing.originalName,
+                isServiceDisruption: listing.isServiceDisruption
+            });
+        });
+
+        if (allItems.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No shifts available</p>';
+            return;
+        }
+
+        let html = '';
+        allItems.forEach((item, idx) => {
+            const colorClass = item.isServiceDisruption ? 'red' : '';
+            const label = item.type === 'marketplace' ? ` (Swap from ${item.originalName})` : '';
+            
+            if (item.type === 'marketplace') {
+                html += `
+                    <div class="shift-item ${colorClass}">
+                        <div class="shift-item-header">
+                            <strong>${item.date} - ${item.jobType}${label}</strong>
+                            ${item.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold;">SERVICE-DISRUPTION</span>' : ''}
+                        </div>
+                        <div class="shift-item-meta">
+                            Location: ${item.location}<br>
+                            Offered by: ${item.originalName}
+                        </div>
+                        <div class="shift-item-actions">
+                            <button class="btn-success" onclick="claimShift('${item.originalEmail}', '${item.originalName}', '${item.date}', '${item.jobType}', '${item.location}')">Claim Shift</button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="shift-item ${colorClass}">
+                        <div class="shift-item-header">
+                            <input type="checkbox" id="shift-${idx}" value="${idx}" style="margin-right: 10px;">
+                            <label for="shift-${idx}"><strong>${item.date} - ${item.jobType} @ ${item.location}</strong></label>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        container.innerHTML = html;
+    }
+
+    function submitListShift() {
+        const date = document.getElementById('swapDate').value;
+        const location = document.getElementById('swapLocation').value;
+        const jobType = document.getElementById('swapJobType').value;
+        const isServiceDisruption = document.getElementById('swapIsServiceDisruption').checked;
+
+        if (!date || !location || !jobType) {
+            showMessage('Please fill in all fields', 'error');
+            return;
+        }
+
+        showMessage('Listing shift for swap...', 'info');
+
+        google.script.run.withSuccessHandler(function(result) {
+            if (result.error) {
+                showMessage(result.error, 'error');
+            } else {
+                showMessage('✓ Shift listed for swap!', 'success');
+                document.getElementById('swapDate').value = '';
+                document.getElementById('swapLocation').value = '';
+                document.getElementById('swapJobType').value = '';
+                document.getElementById('swapIsServiceDisruption').checked = false;
+            }
+        }).listShiftForSwap(currentUser.email, currentUser.name, date, jobType, location, isServiceDisruption);
+    }
+
+    function claimShift(originalEmail, originalName, date, jobType, location) {
+        showMessage('Claiming shift...', 'info');
+
+        google.script.run.withSuccessHandler(function(result) {
+            if (result.error) {
+                showMessage(result.error, 'error');
+            } else {
+                showMessage('✓ Shift claimed! Rostering officer has been notified.', 'success');
+                setTimeout(() => loadAvailableShifts(), 1500);
+            }
+        }).claimShift(currentUser.email, currentUser.name, originalEmail, originalName, date, jobType, location);
+    }
+
+    function loadSettingsScreen() {
+        const container = document.getElementById('locationList');
+        
+        if (!container) return;
+        
+        let html = '';
+        allLocations.forEach(loc => {
+            const checked = userLocations.includes(loc) ? ' checked' : '';
+            html += `
+                <div class="location-item">
+                    <input type="checkbox" id="loc-${loc}" value="${loc}"${checked}>
+                    <label for="loc-${loc}">${loc}</label>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    function saveSettings() {
+        const locCheckboxes = document.querySelectorAll('#locationList input[type="checkbox"]');
+        const locs = Array.from(locCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+        
+        if (locs.length === 0) {
+            showMessage('Please select at least one location', 'error');
+            return;
+        }
+        
+        showMessage('Saving settings...', 'info');
+        userLocations = locs;
+        showMessage('✓ Settings saved', 'success');
+    }
+
+    function requestShifts() {
+        const checkboxes = document.querySelectorAll('#shiftsContainer input[type="checkbox"]:checked');
+        if (checkboxes.length === 0) {
+            showMessage('Please select at least one shift', 'error');
+            return;
+        }
+
+        const selected = Array.from(checkboxes).map(cb => {
+            const idx = parseInt(cb.value);
+            return allShifts[idx];
+        });
+        
+        showMessage('Requesting shifts...', 'info');
+
+        google.script.run.withSuccessHandler(function() {
+            showMessage('✓ Shift request(s) sent successfully!', 'success');
+            setTimeout(() => loadAvailableShifts(), 1500);
+        }).requestShifts(currentUser.email, currentUser.name, selected);
+    }
+
+    function logout() {
+        currentUser = null;
+        userRole = null;
+        userLocations = [];
+        document.getElementById('mainDashboard').style.display = 'none';
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('emailInput').value = '';
+        document.getElementById('passwordInput').value = '';
+    }
+</script>
+
+</body>
+</html>
