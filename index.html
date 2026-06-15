@@ -89,7 +89,6 @@
             background: #c82333;
         }
 
-        /* Login Screen */
         .login-container {
             display: flex;
             justify-content: center;
@@ -128,7 +127,6 @@
             margin-top: 20px;
         }
 
-        /* Dashboard */
         .dashboard {
             display: none;
         }
@@ -178,7 +176,6 @@
             margin-bottom: 15px;
         }
 
-        /* Messages */
         .message {
             padding: 12px 16px;
             border-radius: 4px;
@@ -198,50 +195,13 @@
             border: 1px solid #f5c6cb;
         }
 
-        /* Shift Item */
-        .shift-item {
-            background: #f9f9f9;
-            border-left: 4px solid #000;
-            padding: 15px;
-            margin-bottom: 12px;
-            border-radius: 4px;
-        }
-
-        .shift-item.red {
-            border-left-color: #dc3545;
-            background: #ffe6e6;
-        }
-
-        .shift-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .shift-item-header strong {
-            font-size: 16px;
-        }
-
-        .shift-item-meta {
-            color: #666;
-            font-size: 13px;
-            margin-bottom: 10px;
-        }
-
-        .shift-item-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        /* Approvals Table */
-        .approvals-table {
+        .vacancies-table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
         }
 
-        .approvals-table th {
+        .vacancies-table th {
             background: #f0f0f0;
             padding: 12px;
             text-align: left;
@@ -249,45 +209,13 @@
             font-weight: 600;
         }
 
-        .approvals-table td {
+        .vacancies-table td {
             padding: 12px;
             border-bottom: 1px solid #f0f0f0;
         }
 
-        .approvals-table tr:hover {
+        .vacancies-table tr:hover {
             background: #f9f9f9;
-        }
-
-        /* Form Styles */
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
         }
 
         .location-list {
@@ -303,10 +231,6 @@
             border-radius: 4px;
         }
 
-        .location-item:hover {
-            background: #f9f9f9;
-        }
-
         .location-item input[type="checkbox"] {
             width: 18px;
             height: 18px;
@@ -318,32 +242,10 @@
             margin-bottom: 0;
             flex: 1;
         }
-
-        .color-key {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            font-size: 13px;
-        }
-
-        .color-key-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
-
-        .color-key-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 2px;
-        }
     </style>
 </head>
 <body>
 
-<!-- Login Screen -->
 <div id="loginScreen" class="login-container">
     <div class="login-card">
         <h2>Rural Rosters</h2>
@@ -354,7 +256,6 @@
     </div>
 </div>
 
-<!-- Main Dashboard -->
 <div id="mainDashboard" class="dashboard">
     <div class="container">
         <header>
@@ -367,14 +268,9 @@
 
         <div id="messageContainer"></div>
 
-        <div class="tabs" id="tabsContainer">
-            <!-- Tabs dynamically inserted here -->
-        </div>
+        <div class="tabs" id="tabsContainer"></div>
 
-        <!-- Tabs Content Dynamically Inserted -->
-        <div id="tabsContent">
-            <!-- Tab content dynamically inserted here -->
-        </div>
+        <div id="tabsContent"></div>
     </div>
 </div>
 
@@ -385,7 +281,6 @@
         document.getElementById('loadingText').style.display = 'none';
     });
     
-    // HTTP fetch-based API shim
     const google = {
         script: {
             run: {
@@ -395,24 +290,20 @@
                             const result = await callBackend('checkUserExists', {email, password});
                             if (callback) callback(result);
                         },
-                        getStaffAvailableShifts: async (email) => {
-                            const result = await callBackend('getStaffAvailableShifts', {email});
+                        getOfficerLocations: async (email) => {
+                            const result = await callBackend('getOfficerLocations', {email});
                             if (callback) callback(result);
                         },
-                        getMarketplaceListings: async (email) => {
-                            const result = await callBackend('getMarketplaceListings', {email});
+                        getOfficerVacancies: async (email) => {
+                            const result = await callBackend('getOfficerVacancies', {email});
                             if (callback) callback(result);
                         },
-                        requestShifts: async (email, name, shifts) => {
-                            const result = await callBackend('requestShifts', {email, name, shifts});
+                        getJobTypesForOfficer: async (email) => {
+                            const result = await callBackend('getJobTypesForOfficer', {email});
                             if (callback) callback(result);
                         },
-                        listShiftForSwap: async (email, name, date, jobType, location, isServiceDisruption) => {
-                            const result = await callBackend('listShiftForSwap', {email, name, date, jobType, location, isServiceDisruption});
-                            if (callback) callback(result);
-                        },
-                        claimShift: async (claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) => {
-                            const result = await callBackend('claimShift', {claimingEmail, claimingName, originalEmail, originalName, date, jobType, location});
+                        saveOfficerVacancies: async (email, vacancies) => {
+                            const result = await callBackend('saveOfficerVacancies', {email, vacancies});
                             if (callback) callback(result);
                         }
                     };
@@ -440,14 +331,10 @@
         }
     }
     
-    // ========== APPLICATION CODE ==========
-    
     let currentUser = null;
     let userRole = null;
     let userLocations = [];
-    let allShifts = [];
-    let marketplaceListings = [];
-    const allLocations = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
+    let jobTypesByLocation = {};
 
     function loginWithEmail() {
         const email = document.getElementById('emailInput').value.trim().toLowerCase();
@@ -478,7 +365,10 @@
         document.getElementById('userNameDisplay').textContent = currentUser.name || currentUser.email;
         
         setupTabs();
-        loadInitialData();
+        
+        if (userRole === 'Officer') {
+            loadOfficerData();
+        }
     }
 
     function setupTabs() {
@@ -489,18 +379,31 @@
         tabsContent.innerHTML = '';
 
         if (userRole === 'Officer') {
-            // Officer tabs (placeholder for now)
             tabsContainer.innerHTML = `
                 <button class="tab-button active" onclick="switchTab(0, this)">My Vacancies</button>
+                <button class="tab-button" onclick="switchTab(1, this)">Shift Cover Approvals</button>
+                <button class="tab-button" onclick="switchTab(2, this)">Swap Verification Requests</button>
             `;
+            
             tabsContent.innerHTML = `
                 <div id="tab-0" class="tab-content active">
                     <h3>My Vacancies</h3>
-                    <p>Officer functionality coming soon</p>
+                    <button class="btn-primary" onclick="addVacancyRow()">+ Add Shift</button>
+                    <button class="btn-primary" onclick="saveVacancies()" style="margin-left: 10px;">Save Changes</button>
+                    <div id="vacanciesContainer"></div>
+                </div>
+                <div id="tab-1" class="tab-content">
+                    <h3>Shift Cover Approvals</h3>
+                    <p>Staff members claiming shifts from the marketplace</p>
+                    <div id="approvalsContainer"></div>
+                </div>
+                <div id="tab-2" class="tab-content">
+                    <h3>Swap Verification Requests</h3>
+                    <p>Verify staff members are rostered before allowing them to offer shifts for swap</p>
+                    <div id="swapVerifyContainer"></div>
                 </div>
             `;
         } else {
-            // Staff tabs
             tabsContainer.innerHTML = `
                 <button class="tab-button active" onclick="switchTab(0, this)">Available Shifts</button>
                 <button class="tab-button" onclick="switchTab(1, this)">List Shift for Swap</button>
@@ -510,56 +413,15 @@
             tabsContent.innerHTML = `
                 <div id="tab-0" class="tab-content active">
                     <h3>Available Shifts & Marketplace</h3>
-                    <button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button>
-                    <div class="color-key">
-                        <div class="color-key-item">
-                            <div class="color-key-dot" style="background: #000;"></div>
-                            <span>Routine shifts</span>
-                        </div>
-                        <div class="color-key-item">
-                            <div class="color-key-dot" style="background: #dc3545;"></div>
-                            <span>Service-disruption shifts (PRIORITY)</span>
-                        </div>
-                    </div>
-                    <div id="shiftsContainer"></div>
+                    <p>Staff interface coming soon</p>
                 </div>
                 <div id="tab-1" class="tab-content">
                     <h3>List Shift for Swap</h3>
-                    <p>Offer a shift you want to swap</p>
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="swapDate" />
-                    </div>
-                    <div class="form-group">
-                        <label>Location</label>
-                        <select id="swapLocation">
-                            <option value="">Select Location</option>
-                            <option value="Innisfail">Innisfail</option>
-                            <option value="Mareeba">Mareeba</option>
-                            <option value="Tully">Tully</option>
-                            <option value="Yarrabah">Yarrabah</option>
-                            <option value="Atherton">Atherton</option>
-                            <option value="Mossman">Mossman</option>
-                            <option value="Babinda">Babinda</option>
-                            <option value="Cairns">Cairns</option>
-                            <option value="Telehealth">Telehealth</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Job Type</label>
-                        <input type="text" id="swapJobType" placeholder="e.g., RFDS Night, ED Day" />
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="swapIsServiceDisruption" />
-                        <label for="swapIsServiceDisruption">This is a service-disruption shift (check if critical)</label>
-                    </div>
-                    <button class="btn-primary" onclick="submitListShift()">List Shift for Swap</button>
+                    <p>Staff interface coming soon</p>
                 </div>
                 <div id="tab-2" class="tab-content">
                     <h3>Settings</h3>
-                    <h4 style="margin-bottom: 15px;">Work Location Preferences</h4>
-                    <div class="location-list" id="locationList"></div>
-                    <button class="btn-primary" onclick="saveSettings()" style="margin-top: 20px;">Save Settings</button>
+                    <p>Staff interface coming soon</p>
                 </div>
             `;
         }
@@ -570,11 +432,6 @@
         document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
         document.getElementById('tab-' + idx).classList.add('active');
         btn.classList.add('active');
-        
-        // Refresh available shifts when switching back to tab 0
-        if (idx === 0 && userRole !== 'Officer') {
-            loadAvailableShifts();
-        }
     }
 
     function showMessage(text, type) {
@@ -587,190 +444,123 @@
         setTimeout(() => { if (messageEl.parentNode) messageEl.remove(); }, 5000);
     }
 
-    function loadInitialData() {
-        if (userRole === 'Officer') {
-            // Officer data loading
-        } else {
-            loadAvailableShifts();
-            loadSettingsScreen();
-        }
-    }
-
-    function loadAvailableShifts() {
-        showMessage('Loading shifts...', 'info');
+    function loadOfficerData() {
+        showMessage('Loading vacancies...', 'info');
         
-        google.script.run.withSuccessHandler(function(shifts) {
-            allShifts = shifts || [];
+        google.script.run.withSuccessHandler(function(jobTypes) {
+            jobTypesByLocation = jobTypes || {};
             
-            // Also load marketplace
-            google.script.run.withSuccessHandler(function(marketplace) {
-                marketplaceListings = marketplace || [];
-                renderAllShifts();
-            }).getMarketplaceListings(currentUser.email);
-        }).getStaffAvailableShifts(currentUser.email);
+            google.script.run.withSuccessHandler(function(vacancies) {
+                renderVacanciesTable(vacancies || []);
+                showMessage('', 'success');
+            }).getOfficerVacancies(currentUser.email);
+        }).getJobTypesForOfficer(currentUser.email);
     }
 
-    function renderAllShifts() {
-        const container = document.getElementById('shiftsContainer');
+    function renderVacanciesTable(vacancies) {
+        const container = document.getElementById('vacanciesContainer');
         
-        // Combine available shifts and marketplace listings
-        const allItems = [];
-        
-        // Add available shifts
-        (allShifts || []).forEach(shift => {
-            allItems.push({
-                type: 'available',
-                date: shift.date,
-                jobType: shift.jobType,
-                location: shift.location,
-                isServiceDisruption: false
-            });
-        });
-        
-        // Add marketplace listings
-        (marketplaceListings || []).forEach(listing => {
-            allItems.push({
-                type: 'marketplace',
-                date: listing.date,
-                jobType: listing.jobType,
-                location: listing.location,
-                originalEmail: listing.originalEmail,
-                originalName: listing.originalName,
-                isServiceDisruption: listing.isServiceDisruption
-            });
-        });
-
-        if (allItems.length === 0) {
-            container.innerHTML = '<p style="color: #999;">No shifts available</p>';
+        if (!vacancies || vacancies.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No vacancies yet</p>';
             return;
         }
 
-        let html = '';
-        allItems.forEach((item, idx) => {
-            const colorClass = item.isServiceDisruption ? 'red' : '';
-            const label = item.type === 'marketplace' ? ` (Swap from ${item.originalName})` : '';
-            
-            if (item.type === 'marketplace') {
-                html += `
-                    <div class="shift-item ${colorClass}">
-                        <div class="shift-item-header">
-                            <strong>${item.date} - ${item.jobType}${label}</strong>
-                            ${item.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold;">SERVICE-DISRUPTION</span>' : ''}
-                        </div>
-                        <div class="shift-item-meta">
-                            Location: ${item.location}<br>
-                            Offered by: ${item.originalName}
-                        </div>
-                        <div class="shift-item-actions">
-                            <button class="btn-success" onclick="claimShift('${item.originalEmail}', '${item.originalName}', '${item.date}', '${item.jobType}', '${item.location}')">Claim Shift</button>
-                        </div>
-                    </div>
-                `;
-            } else {
-                html += `
-                    <div class="shift-item ${colorClass}">
-                        <div class="shift-item-header">
-                            <input type="checkbox" id="shift-${idx}" value="${idx}" style="margin-right: 10px;">
-                            <label for="shift-${idx}"><strong>${item.date} - ${item.jobType} @ ${item.location}</strong></label>
-                        </div>
-                    </div>
-                `;
-            }
+        const sorted = vacancies.sort((a, b) => {
+            const dateA = parseDate(a.date);
+            const dateB = parseDate(b.date);
+            return dateA - dateB;
         });
+
+        let html = '<table class="vacancies-table"><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr>';
         
+        sorted.forEach((vac, idx) => {
+            let dateString = '';
+            if (vac.date && vac.date.includes('/')) {
+                const parts = vac.date.split('/');
+                if (parts.length === 3) {
+                    const day = String(parts[0]).padStart(2, '0');
+                    const month = String(parts[1]).padStart(2, '0');
+                    const year = parts[2];
+                    dateString = year + '-' + month + '-' + day;
+                }
+            }
+            
+            const location = String(vac.location).trim();
+            const jobTypes = jobTypesByLocation[location] || [];
+            
+            let jobTypeOptions = '<select class="vac-jobtype" style="width: 100%; padding: 4px; border: 1px solid #ddd;"><option value="">Select Job Type</option>';
+            jobTypes.forEach(jt => {
+                const selected = jt === vac.jobType ? ' selected' : '';
+                jobTypeOptions += '<option value="' + jt + '"' + selected + '>' + jt + '</option>';
+            });
+            jobTypeOptions += '</select>';
+            
+            html += '<tr><td><input type="date" class="vac-date" value="' + dateString + '" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td><td><input type="text" class="vac-location" value="' + location + '" style="width: 100%; padding: 4px; border: 1px solid #ddd;" disabled></td><td>' + jobTypeOptions + '</td><td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td></tr>';
+        });
+        html += '</table>';
         container.innerHTML = html;
     }
-
-    function submitListShift() {
-        const date = document.getElementById('swapDate').value;
-        const location = document.getElementById('swapLocation').value;
-        const jobType = document.getElementById('swapJobType').value;
-        const isServiceDisruption = document.getElementById('swapIsServiceDisruption').checked;
-
-        if (!date || !location || !jobType) {
-            showMessage('Please fill in all fields', 'error');
-            return;
+    
+    function parseDate(dateStr) {
+        if (!dateStr) return new Date(0);
+        if (dateStr.includes('/')) {
+            const [day, month, year] = dateStr.split('/');
+            return new Date(year, month - 1, day);
         }
+        return new Date(dateStr);
+    }
 
-        showMessage('Listing shift for swap...', 'info');
+    function addVacancyRow() {
+        const container = document.getElementById('vacanciesContainer');
+        let table = container.querySelector('table');
+        const location = userLocations[0];
+        
+        if (!table) {
+            let html = '<table class="vacancies-table"><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr></table>';
+            container.innerHTML = html;
+            table = container.querySelector('table');
+        }
+        
+        const newRow = table.insertRow();
+        newRow.innerHTML = '<td><input type="date" class="vac-date" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td><td><input type="text" class="vac-location" value="' + location + '" style="width: 100%; padding: 4px; border: 1px solid #ddd;" disabled></td><td><select class="vac-jobtype" style="width: 100%; padding: 4px; border: 1px solid #ddd;"><option value="">Select Job Type</option></select></td><td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>';
+    }
 
-        google.script.run.withSuccessHandler(function(result) {
-            if (result.error) {
-                showMessage(result.error, 'error');
-            } else {
-                showMessage('✓ Shift listed for swap!', 'success');
-                document.getElementById('swapDate').value = '';
-                document.getElementById('swapLocation').value = '';
-                document.getElementById('swapJobType').value = '';
-                document.getElementById('swapIsServiceDisruption').checked = false;
+    function removeVacancyRow(btn) {
+        btn.parentElement.parentElement.remove();
+    }
+
+    function saveVacancies() {
+        const rows = document.querySelectorAll('#vacanciesContainer table tr');
+        const vacancies = [];
+        
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const dateInput = row.querySelector('.vac-date');
+            const jobtypeInput = row.querySelector('.vac-jobtype');
+            const locationInput = row.querySelector('.vac-location');
+            
+            if (dateInput && jobtypeInput && locationInput) {
+                let date = dateInput.value;
+                const jobType = jobtypeInput.value;
+                const location = locationInput.value;
+                
+                if (date && date.includes('-')) {
+                    const [year, month, day] = date.split('-');
+                    date = day + '/' + month + '/' + year;
+                }
+                
+                if (date && jobType && location) {
+                    vacancies.push({ date, jobType, location });
+                }
             }
-        }).listShiftForSwap(currentUser.email, currentUser.name, date, jobType, location, isServiceDisruption);
-    }
-
-    function claimShift(originalEmail, originalName, date, jobType, location) {
-        showMessage('Claiming shift...', 'info');
-
-        google.script.run.withSuccessHandler(function(result) {
-            if (result.error) {
-                showMessage(result.error, 'error');
-            } else {
-                showMessage('✓ Shift claimed! Rostering officer has been notified.', 'success');
-                setTimeout(() => loadAvailableShifts(), 1500);
-            }
-        }).claimShift(currentUser.email, currentUser.name, originalEmail, originalName, date, jobType, location);
-    }
-
-    function loadSettingsScreen() {
-        const container = document.getElementById('locationList');
-        
-        if (!container) return;
-        
-        let html = '';
-        allLocations.forEach(loc => {
-            const checked = userLocations.includes(loc) ? ' checked' : '';
-            html += `
-                <div class="location-item">
-                    <input type="checkbox" id="loc-${loc}" value="${loc}"${checked}>
-                    <label for="loc-${loc}">${loc}</label>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
-    }
-
-    function saveSettings() {
-        const locCheckboxes = document.querySelectorAll('#locationList input[type="checkbox"]');
-        const locs = Array.from(locCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
-        
-        if (locs.length === 0) {
-            showMessage('Please select at least one location', 'error');
-            return;
-        }
-        
-        showMessage('Saving settings...', 'info');
-        userLocations = locs;
-        showMessage('✓ Settings saved', 'success');
-    }
-
-    function requestShifts() {
-        const checkboxes = document.querySelectorAll('#shiftsContainer input[type="checkbox"]:checked');
-        if (checkboxes.length === 0) {
-            showMessage('Please select at least one shift', 'error');
-            return;
         }
 
-        const selected = Array.from(checkboxes).map(cb => {
-            const idx = parseInt(cb.value);
-            return allShifts[idx];
-        });
-        
-        showMessage('Requesting shifts...', 'info');
+        showMessage('Saving vacancies...', 'info');
 
         google.script.run.withSuccessHandler(function() {
-            showMessage('✓ Shift request(s) sent successfully!', 'success');
-            setTimeout(() => loadAvailableShifts(), 1500);
-        }).requestShifts(currentUser.email, currentUser.name, selected);
+            showMessage('✓ Vacancies saved successfully', 'success');
+            loadOfficerData();
+        }).saveOfficerVacancies(currentUser.email, vacancies);
     }
 
     function logout() {
