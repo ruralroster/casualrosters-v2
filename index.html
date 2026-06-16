@@ -53,11 +53,18 @@
         .shift-item-header strong { font-size: 16px; flex: 1; }
         .shift-item-meta { color: #666; font-size: 13px; margin-bottom: 10px; }
         .shift-item-actions { display: flex; gap: 10px; }
+        .fortnight-grid { display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px; margin: 20px 0; }
+        .fortnight-day { text-align: center; font-size: 11px; font-weight: 600; padding: 5px; background: #f0f0f0; border-radius: 3px; }
+        .fortnight-checkbox { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .fortnight-checkbox input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .fortnight-row-label { font-weight: 600; margin-bottom: 10px; }
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
         .modal.active { display: flex; }
-        .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 600px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-height: 80vh; overflow-y: auto; }
         .modal-content h3 { margin-bottom: 20px; }
         .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .availability-list { background: #f9f9f9; padding: 15px; border-radius: 4px; margin: 15px 0; }
+        .availability-item { padding: 8px; margin: 5px 0; background: white; border-left: 3px solid #2c3e50; padding-left: 12px; }
     </style>
 </head>
 <body>
@@ -86,6 +93,18 @@
     </div>
 </div>
 
+<div id="availabilityModal" class="modal">
+    <div class="modal-content">
+        <h3>Select Your Available Days</h3>
+        <p>Check the days and shifts you can work in this fortnight:</p>
+        <div id="availabilityGrid"></div>
+        <div class="modal-buttons">
+            <button class="btn-primary" onclick="confirmAvailability()">Confirm Availability</button>
+            <button class="btn-secondary" onclick="closeAvailabilityModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <div id="denyReasonModal" class="modal">
     <div class="modal-content">
         <h3>Deny Swap Verification</h3>
@@ -109,6 +128,27 @@
     let allShifts = [];
     let marketplaceListings = [];
     let pendingSwapToApprove = null;
+    let currentSwapSelection = null;
+    let selectedAvailability = {};
+
+    const FORTNIGHT_START = new Date(2026, 4, 25); // 25 May 2026
+
+    function getFortnight(date) {
+        const d = new Date(date);
+        const daysDiff = Math.floor((d - FORTNIGHT_START) / (1000 * 60 * 60 * 24));
+        const fortnightNumber = Math.floor(daysDiff / 14);
+        const fortnightStart = new Date(FORTNIGHT_START);
+        fortnightStart.setDate(fortnightStart.getDate() + fortnightNumber * 14);
+        return { fortnightStart, fortnightNumber };
+    }
+
+    function getDayLabel(date) {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const d = new Date(date);
+        const dayNum = d.getDate();
+        const dayName = days[d.getDay()];
+        return `${dayName} ${dayNum}`;
+    }
 
     const google = {
         script: {
@@ -147,8 +187,8 @@
                             const result = await callBackend('getMarketplaceListings', {email});
                             if (callback) callback(result);
                         },
-                        listShiftForSwap: async (email, name, date, jobType, location, isServiceDisruption) => {
-                            const result = await callBackend('listShiftForSwap', {email, name, date, jobType, location, isServiceDisruption});
+                        listShiftForSwap: async (email, name, date, jobType, location, availability, isServiceDisruption) => {
+                            const result = await callBackend('listShiftForSwap', {email, name, date, jobType, location, availability, isServiceDisruption});
                             if (callback) callback(result);
                         },
                         getOfficerPendingSwapVerifications: async (email) => {
@@ -165,6 +205,10 @@
                         },
                         getStaffCurrentSwaps: async (email) => {
                             const result = await callBackend('getStaffCurrentSwaps', {email});
+                            if (callback) callback(result);
+                        },
+                        getStaffRosteredShifts: async (email) => {
+                            const result = await callBackend('getStaffRosteredShifts', {email});
                             if (callback) callback(result);
                         }
                     };
@@ -283,26 +327,13 @@
                     <div id="currentSwapsContainer"></div>
                     <h4 style="margin-top: 30px; margin-bottom: 15px;">List a New Shift for Swap</h4>
                     <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="swapDate" />
-                    </div>
-                    <div class="form-group">
-                        <label>Location</label>
-                        <select id="swapLocation" onchange="updateSwapJobTypes()">
-                            <option value="">Select Location</option>
+                        <label>Select Shift to Swap</label>
+                        <select id="swapShiftSelect" onchange="prepareSwapAvailability()">
+                            <option value="">-- Select a shift --</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>Job Type</label>
-                        <select id="swapJobType">
-                            <option value="">Select Job Type</option>
-                        </select>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                        <input type="checkbox" id="swapIsServiceDisruption" />
-                        <label for="swapIsServiceDisruption" style="margin-bottom: 0;">Service-disruption shift</label>
-                    </div>
-                    <button class="btn-primary" onclick="submitListShift()">List Shift for Swap</button>
+                    <div id="swapAvailabilityInfo"></div>
+                    <button class="btn-primary" id="confirmSwapBtn" onclick="openAvailabilityModal()" style="margin-top: 15px; display: none;">Select Your Available Days</button>
                 </div>
                 <div id="tab-2" class="tab-content">
                     <h3>Settings</h3>
@@ -504,6 +535,7 @@
                         <strong>${swap.staffName}</strong>
                         <span style="color: #666;">${swap.date} - ${swap.jobType} @ ${swap.location}</span>
                     </div>
+                    <div class="shift-item-meta">Available days: ${swap.availability ? swap.availability.join(', ') : 'None specified'}</div>
                     <div class="shift-item-actions">
                         <button class="btn-success" onclick="approveSwapVerification('${swap.staffEmail}', '${swap.staffName}', '${swap.date}', '${swap.jobType}', '${swap.location}')">Approve</button>
                         <button class="btn-danger" onclick="openDenyModal('${swap.staffEmail}', '${swap.staffName}', '${swap.date}', '${swap.jobType}', '${swap.location}')">Deny</button>
@@ -563,35 +595,131 @@
 
     // STAFF FUNCTIONS
     function loadStaffData() {
-        populateSwapLocations();
+        loadSwapShiftOptions();
         loadSettingsScreen();
         loadStaffCurrentSwaps();
         loadStaffAvailableShifts();
     }
 
-    function populateSwapLocations() {
-        const select = document.getElementById('swapLocation');
-        select.innerHTML = '<option value="">Select Location</option>';
-        userLocations.forEach(loc => {
-            const opt = document.createElement('option');
-            opt.value = loc;
-            opt.textContent = loc;
-            select.appendChild(opt);
+    function loadSwapShiftOptions() {
+        google.script.run.withSuccessHandler(function(shifts) {
+            const select = document.getElementById('swapShiftSelect');
+            select.innerHTML = '<option value="">-- Select a shift --</option>';
+            (shifts || []).forEach((shift, idx) => {
+                const opt = document.createElement('option');
+                opt.value = JSON.stringify({idx, shift});
+                opt.textContent = `${shift.date} - ${shift.jobType} @ ${shift.location}`;
+                select.appendChild(opt);
+            });
+        }).getStaffAvailableShifts(currentUser.email);
+    }
+
+    function prepareSwapAvailability() {
+        const select = document.getElementById('swapShiftSelect');
+        const value = select.value;
+        const infoDiv = document.getElementById('swapAvailabilityInfo');
+        const confirmBtn = document.getElementById('confirmSwapBtn');
+        
+        if (!value) {
+            infoDiv.innerHTML = '';
+            confirmBtn.style.display = 'none';
+            return;
+        }
+
+        const data = JSON.parse(value);
+        const shift = data.shift;
+        const fortnight = getFortnight(new Date(shift.date.split('/').reverse().join('-')));
+        
+        infoDiv.innerHTML = `<p><strong>Shift to swap:</strong> ${shift.date} - ${shift.jobType} @ ${shift.location}</p>
+                            <p style="color: #666; font-size: 13px;">Select available days in this fortnight below</p>`;
+        confirmBtn.style.display = 'block';
+        currentSwapSelection = { shift, fortnight };
+        selectedAvailability = {};
+    }
+
+    function openAvailabilityModal() {
+        if (!currentSwapSelection) {
+            showMessage('Please select a shift first', 'error');
+            return;
+        }
+
+        const { fortnight } = currentSwapSelection;
+        const fortnightStart = fortnight.fortnightStart;
+        
+        let html = '<div class="fortnight-grid">';
+        
+        // Header with day labels
+        html += '<div style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px; margin-bottom: 10px;">';
+        for (let i = 0; i < 14; i++) {
+            const date = new Date(fortnightStart);
+            date.setDate(date.getDate() + i);
+            html += `<div class="fortnight-day">${getDayLabel(date)}</div>`;
+        }
+        html += '</div>';
+        
+        // Day row
+        html += '<div style="margin-bottom: 15px;"><div class="fortnight-row-label">Day Shifts</div><div style="display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px;">';
+        for (let i = 0; i < 14; i++) {
+            const date = new Date(fortnightStart);
+            date.setDate(date.getDate() + i);
+            const dateStr = date.toISOString().split('T')[0];
+            html += `<div class="fortnight-checkbox"><input type="checkbox" id="day_${i}" data-date="${dateStr}" data-shift="day" onchange="updateSelectedAvailability()"><label for="day_${i}" style="font-size: 11px;">Day</label></div>`;
+        }
+        html += '</div></div>';
+        
+        // Night row
+        html += '<div><div class="fortnight-row-label">Night Shifts</div><div style="display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px;">';
+        for (let i = 0; i < 14; i++) {
+            const date = new Date(fortnightStart);
+            date.setDate(date.getDate() + i);
+            const dateStr = date.toISOString().split('T')[0];
+            html += `<div class="fortnight-checkbox"><input type="checkbox" id="night_${i}" data-date="${dateStr}" data-shift="night" onchange="updateSelectedAvailability()"><label for="night_${i}" style="font-size: 11px;">Night</label></div>`;
+        }
+        html += '</div></div>';
+        
+        html += '</div>';
+        
+        document.getElementById('availabilityGrid').innerHTML = html;
+        document.getElementById('availabilityModal').classList.add('active');
+    }
+
+    function updateSelectedAvailability() {
+        selectedAvailability = {};
+        const checkboxes = document.querySelectorAll('#availabilityGrid input[type="checkbox"]:checked');
+        checkboxes.forEach(cb => {
+            const date = cb.dataset.date;
+            const shift = cb.dataset.shift;
+            if (!selectedAvailability[date]) selectedAvailability[date] = [];
+            selectedAvailability[date].push(shift);
         });
     }
 
-    function updateSwapJobTypes() {
-        const location = document.getElementById('swapLocation').value;
-        const jobTypeSelect = document.getElementById('swapJobType');
-        const jobTypes = jobTypesByLocation[location] || [];
+    function confirmAvailability() {
+        if (Object.keys(selectedAvailability).length === 0) {
+            showMessage('Please select at least one available day', 'error');
+            return;
+        }
+
+        const { shift } = currentSwapSelection;
+        showMessage('Submitting swap request...', 'info');
         
-        jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
-        jobTypes.forEach(jt => {
-            const opt = document.createElement('option');
-            opt.value = jt;
-            opt.textContent = jt;
-            jobTypeSelect.appendChild(opt);
-        });
+        google.script.run.withSuccessHandler(function(result) {
+            if (result.error) {
+                showMessage(result.error, 'error');
+            } else {
+                showMessage('✓ Swap request submitted! Officer will verify.', 'success');
+                closeAvailabilityModal();
+                document.getElementById('swapShiftSelect').value = '';
+                document.getElementById('swapAvailabilityInfo').innerHTML = '';
+                document.getElementById('confirmSwapBtn').style.display = 'none';
+                loadStaffCurrentSwaps();
+            }
+        }).listShiftForSwap(currentUser.email, currentUser.name, shift.date, shift.jobType, shift.location, selectedAvailability, false);
+    }
+
+    function closeAvailabilityModal() {
+        document.getElementById('availabilityModal').classList.remove('active');
+        selectedAvailability = {};
     }
 
     function loadStaffCurrentSwaps() {
@@ -611,10 +739,9 @@
         let html = '<h4>Current Shifts Up for Swap</h4>';
         swaps.forEach((swap) => {
             html += `
-                <div class="shift-item ${swap.isServiceDisruption ? 'red' : ''}">
+                <div class="shift-item">
                     <div class="shift-item-header">
                         <strong>${swap.date} - ${swap.jobType} @ ${swap.location}</strong>
-                        ${swap.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold;">SERVICE-DISRUPTION</span>' : ''}
                     </div>
                     <div class="shift-item-meta">Status: ${swap.status}</div>
                 </div>
@@ -659,6 +786,7 @@
                 jobType: listing.jobType,
                 location: listing.location,
                 originalName: listing.originalName,
+                availableDays: listing.availableDays || [],
                 isServiceDisruption: listing.isServiceDisruption
             });
         });
@@ -673,6 +801,16 @@
             const colorClass = item.isServiceDisruption ? 'red' : '';
             
             if (item.type === 'marketplace') {
+                let availabilityText = '';
+                if (item.availableDays && Object.keys(item.availableDays).length > 0) {
+                    availabilityText = '<strong>Staff available on:</strong> ';
+                    const days = [];
+                    for (const [date, shifts] of Object.entries(item.availableDays)) {
+                        days.push(`${date} (${shifts.join('/')})`);
+                    }
+                    availabilityText += days.join(', ');
+                }
+                
                 html += `
                     <div class="shift-item ${colorClass}">
                         <div class="shift-item-header">
@@ -680,6 +818,7 @@
                             ${item.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold;">SERVICE-DISRUPTION</span>' : ''}
                         </div>
                         <div class="shift-item-meta">Offered by: ${item.originalName}</div>
+                        ${availabilityText ? `<div class="shift-item-meta" style="margin-top: 8px;">${availabilityText}</div>` : ''}
                     </div>
                 `;
             } else {
@@ -695,38 +834,6 @@
         });
         
         container.innerHTML = html;
-    }
-
-    function submitListShift() {
-        const date = document.getElementById('swapDate').value;
-        const location = document.getElementById('swapLocation').value;
-        const jobType = document.getElementById('swapJobType').value;
-        const isServiceDisruption = document.getElementById('swapIsServiceDisruption').checked;
-
-        if (!date || !location || !jobType) {
-            showMessage('Please fill in all fields', 'error');
-            return;
-        }
-
-        if (!userLocations.includes(location)) {
-            showMessage('You can only list shifts for locations in your settings', 'error');
-            return;
-        }
-
-        showMessage('Submitting swap request...', 'info');
-
-        google.script.run.withSuccessHandler(function(result) {
-            if (result.error) {
-                showMessage(result.error, 'error');
-            } else {
-                showMessage('✓ Swap request submitted! Officer will verify.', 'success');
-                document.getElementById('swapDate').value = '';
-                document.getElementById('swapLocation').value = '';
-                document.getElementById('swapJobType').value = '';
-                document.getElementById('swapIsServiceDisruption').checked = false;
-                loadStaffCurrentSwaps();
-            }
-        }).listShiftForSwap(currentUser.email, currentUser.name, date, jobType, location, isServiceDisruption);
     }
 
     function loadSettingsScreen() {
@@ -758,7 +865,6 @@
         
         showMessage('Saving settings...', 'info');
         userLocations = locs;
-        populateSwapLocations();
         showMessage('✓ Settings saved', 'success');
     }
 
