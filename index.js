@@ -118,6 +118,12 @@ const server = http.createServer((req, res) => {
           result = await denySwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location);
           break;
         case 'saveOfficerVacancies':
+        case 'approvePendingSwap':
+          result = await approvePendingSwap(params.staffEmail, params.staffName, params.date, params.jobType, params.location);
+          break;
+        case 'denySwapWithReason':
+          result = await denySwapWithReason(params.staffEmail, params.staffName, params.date, params.jobType, params.location, params.reason);
+          break;
           result = await saveOfficerVacancies(params.email, params.vacancies);
           break;
         default:
@@ -920,3 +926,77 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Rural Rosters Backend listening on port ${PORT}`);
 });
+
+// ============================================================================
+// NEW PHASE 2 FUNCTIONS (ADDITIONAL)
+// ============================================================================
+
+async function approvePendingSwap(staffEmail, staffName, date, jobType, location) {
+  try {
+    console.log(`Approving pending swap: ${staffName} ${date} ${jobType} @ ${location}`);
+
+    // Add to Marketplace Listings with status "Available"
+    const row = [
+      staffEmail,
+      staffName,
+      date,
+      jobType,
+      location,
+      'Available',
+      'N'
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'Marketplace Listings!A2:G',
+      valueInputOption: 'RAW',
+      resource: { values: [row] }
+    });
+
+    // Email to staff
+    const htmlBody = `<p>Dear ${staffName},</p>
+<p>Your swap request has been approved!</p>
+<p><strong>${date} - ${jobType} @ ${location}</strong></p>
+<p>Your shift is now available in the marketplace for other staff to claim.</p>
+<p>Thank you,<br>Rural Rosters Support</p>`;
+
+    await transporter.sendMail({
+      from: GMAIL_USER,
+      to: staffEmail,
+      subject: `[Rural Rosters] Your Swap Approved`,
+      html: htmlBody
+    });
+
+    return { success: true, message: 'Swap approved and moved to marketplace' };
+  } catch (err) {
+    console.error('approvePendingSwap error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function denySwapWithReason(staffEmail, staffName, date, jobType, location, reason) {
+  try {
+    console.log(`Denying swap with reason: ${staffName} ${date} ${jobType} @ ${location}`);
+
+    // Email to staff with reason
+    const htmlBody = `<p>Dear ${staffName},</p>
+<p>Your shift swap request has been <strong>DENIED</strong>.</p>
+<p><strong>${date} - ${jobType} @ ${location}</strong></p>
+<p><strong>Reason:</strong> ${reason}</p>
+<p>Please contact your rostering officer directly to discuss this and make other arrangements for this shift.</p>
+<p>Thank you,<br>Rural Rosters Support</p>`;
+
+    await transporter.sendMail({
+      from: GMAIL_USER,
+      to: staffEmail,
+      cc: 'ruralroster@gmail.com',
+      subject: `[Rural Rosters] Your Swap Request Denied`,
+      html: htmlBody
+    });
+
+    return { success: true, message: 'Swap denied and email sent' };
+  } catch (err) {
+    console.error('denySwapWithReason error:', err);
+    return { error: err.toString() };
+  }
+}
