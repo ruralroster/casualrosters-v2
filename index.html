@@ -420,15 +420,28 @@
             
             claimList.forEach((claim, idx) => {
                 const isFirst = idx === 0 ? ' (FIRST)' : '';
+                let availableDaysText = '';
+                if (claim.type === 'swap_claim' && claim.availableDays) {
+                    availableDaysText = `<div style="color: #666; font-size: 13px; margin: 8px 0;"><strong>Can work:</strong> ${claim.availableDays}</div>`;
+                }
+                
                 html += `<div style="padding: 10px; background: white; margin: 8px 0; border-radius: 4px;">
                     <div style="margin-bottom: 8px;"><strong>${claim.claimingName}</strong>${isFirst}</div>
-                    <div style="color: #666; font-size: 13px;">Claimed: ${claim.claimedTimestamp}</div>`;
+                    <div style="color: #666; font-size: 13px;">Submitted: ${claim.claimedTimestamp}</div>
+                    ${availableDaysText}`;
                 
                 if (idx === 0) {
-                    html += `<div style="display: flex; gap: 10px;">
-                        <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail}', '${claim.originalName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>
-                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail}', '${claim.originalName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>
-                    </div>`;
+                    if (claim.type === 'swap_claim') {
+                        html += `<div style="display: flex; gap: 10px;">
+                            <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail}', '${claim.originalName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>
+                            <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail}', '${claim.originalName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>
+                        </div>`;
+                    } else if (claim.type === 'shift_request') {
+                        html += `<div style="display: flex; gap: 10px;">
+                            <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approveShiftRequest('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>
+                            <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="denyShiftRequest('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>
+                        </div>`;
+                    }
                 } else {
                     html += '<div style="color: #999; font-size: 12px;">Awaiting decision on first applicant</div>';
                 }
@@ -462,6 +475,28 @@
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Denied', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+    function approveShiftRequest(email, name, date, jobType, location) {
+        showMessage('Approving shift request...', 'info');
+        // Update the shift request status in the Requests sheet
+        // This is handled by updating the status to "APPROVED"
+        callBackend('approveShiftRequest', {
+            email, name, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Shift request approved', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+    function denyShiftRequest(email, name, date, jobType, location) {
+        showMessage('Denying shift request...', 'info');
+        callBackend('denyShiftRequest', {
+            email, name, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Shift request denied', 'success'); loadOfficerApprovals(); }
         });
     }
 
@@ -616,7 +651,7 @@
         callBackend('getMarketplaceListings', {email: currentUser.email}).then(swaps => {
             const container = document.getElementById('currentSwapsContainer');
             if (!swaps || swaps.length === 0) {
-                container.innerHTML = '<p style="color: #999;">No shifts currently available for swap (awaiting officer approval)</p>';
+                container.innerHTML = '<p style="color: #999;">No approved swaps available (awaiting officer approval of your swap offers)</p>';
             } else {
                 let html = '';
                 swaps.forEach(s => {
@@ -719,7 +754,7 @@
             return;
         }
 
-        showMessage('Submitting swap request...', 'info');
+        showMessage('Submitting swap request (pending officer approval)...', 'info');
         callBackend('listShiftForSwap', {
             email: currentUser.email,
             name: currentUser.name,
@@ -727,11 +762,11 @@
             jobType: pendingFortnightSwap.jobType,
             location: pendingFortnightSwap.location,
             isServiceDisruption: document.getElementById('swapIsServiceDisruption').checked,
-            availableDays: selectedDays
+            availableDays: selectedDays.join(',')
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else {
-                showMessage('✓ Swap request submitted! Awaiting officer approval.', 'success');
+                showMessage('✓ Swap request submitted and pending officer approval. Check back after approval.', 'success');
                 document.getElementById('swapDate').value = '';
                 document.getElementById('swapLocation').value = '';
                 document.getElementById('swapJobType').value = '';
