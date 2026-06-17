@@ -7,11 +7,14 @@ app.use(express.json());
 
 const SHEET_ID = '1iG4SwN4LzFnzKNht2uy8R8YV6XKIftRTbmfW7_YZwtM';
 const GMAIL_USER = 'ruralroster@gmail.com';
-const GMAIL_PASS = 'gckg msat pnzq ltug';
+const GMAIL_PASS = process.env.GMAIL_PASS || 'gckg msat pnzq ltug';
 
+// Use default credentials (workload identity in Cloud Run)
 const auth = new google.auth.GoogleAuth({
-  keyFile: 'rural-rosters-3f30d8812c36.json',
-  scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/gmail.send']
+  scopes: [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/gmail.send'
+  ]
 });
 
 const sheets = google.sheets({ version: 'v4', auth });
@@ -20,6 +23,11 @@ const gmail = google.gmail({ version: 'v1', auth });
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: GMAIL_USER, pass: GMAIL_PASS }
+});
+
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'Rural Rosters API' });
 });
 
 app.post('/', async (req, res) => {
