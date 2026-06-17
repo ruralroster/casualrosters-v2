@@ -318,7 +318,7 @@
         
         newRow.innerHTML = `<td><input type="date" class="vac-date" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td>
         <td>${locHtml}</td>
-        <td><select class="vac-jobtype" style="width: 100%; padding: 4px;"><option value="">Select Job Type</option></select></td>
+        <td><select class="vac-jobtype" onchange="updateNewRowJobTypes(this.parentElement.previousElementSibling.querySelector('.vac-location'))" style="width: 100%; padding: 4px;"><option value="">Select Job Type</option></select></td>
         <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>`;
     }
 
@@ -655,7 +655,12 @@
             } else {
                 let html = '';
                 swaps.forEach(s => {
-                    html += `<div class="shift-item"><strong>${s.date} - ${s.jobType} @ ${s.location}</strong><div style="color: #666; font-size: 13px;">Offered by: ${s.originalName}</div></div>`;
+                    const availableDaysText = s.availableDays ? `<div style="color: #666; font-size: 12px; margin-top: 5px;"><strong>Can work:</strong> ${s.availableDays}</div>` : '';
+                    html += `<div class="shift-item">
+                        <div><strong>${s.date} - ${s.jobType} @ ${s.location}</strong></div>
+                        <div style="color: #666; font-size: 13px;">Offered by: ${s.originalName}</div>
+                        ${availableDaysText}
+                    </div>`;
                 });
                 container.innerHTML = html;
             }
