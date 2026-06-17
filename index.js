@@ -117,6 +117,9 @@ const server = http.createServer((req, res) => {
         case 'denySwap':
           result = await denySwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location);
           break;
+        case 'saveOfficerVacancies':
+          result = await saveOfficerVacancies(params.email, params.vacancies);
+          break;
         default:
           result = { error: 'Unknown action: ' + action };
       }
@@ -819,6 +822,78 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
     return { success: true, message: 'Swap denied and emails sent' };
   } catch (err) {
     console.error('denySwap error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function saveOfficerVacancies(email, vacancies) {
+  try {
+    const locations = await getOfficerLocations(email);
+    
+    if (locations.length === 0) {
+      return { error: 'No locations found for officer' };
+    }
+
+    console.log(`Saving ${vacancies.length} vacancies for officer ${email}`);
+
+    // For each location, clear old vacancies and write new ones
+    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
+    
+    for (let location of locations) {
+      if (!locationNames.includes(location)) continue;
+      
+      const sheetName = `Vacancies - ${location}`;
+      
+      // Get current vacancies to delete
+      try {
+        const result = await sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: `${sheetName}!A2:D`
+        });
+
+        const existingRows = result.data.values || [];
+        
+        // Delete all existing rows (delete from bottom up to avoid row shifts)
+        for (let i = existingRows.length - 1; i >= 0; i--) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${sheetName}!A${i + 2}:D${i + 2}`,
+            valueInputOption: 'RAW',
+            resource: { values: [[]] }
+          });
+        }
+      } catch (err) {
+        console.log(`Sheet ${sheetName} might not exist yet, continuing...`);
+      }
+    }
+
+    // Add new vacancies grouped by location
+    const vacanciesByLocation = {};
+    for (let vac of vacancies) {
+      const loc = vac.location;
+      if (!vacanciesByLocation[loc]) {
+        vacanciesByLocation[loc] = [];
+      }
+      vacanciesByLocation[loc].push(vac);
+    }
+
+    for (let location in vacanciesByLocation) {
+      const sheetName = `Vacancies - ${location}`;
+      const rows = vacanciesByLocation[location].map(vac => [vac.date, vac.jobType, location, '']);
+
+      if (rows.length > 0) {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID,
+          range: `${sheetName}!A2:D`,
+          valueInputOption: 'RAW',
+          resource: { values: rows }
+        });
+      }
+    }
+
+    return { success: true, message: `Saved ${vacancies.length} vacancies` };
+  } catch (err) {
+    console.error('saveOfficerVacancies error:', err);
     return { error: err.toString() };
   }
 }
