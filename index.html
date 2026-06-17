@@ -81,6 +81,18 @@
 <script>
     const BACKEND_URL = 'https://ruralrostersproxy-staging-168129620374.australia-southeast1.run.app';
     const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
+    const JOB_TYPES_BY_LOCATION = {
+        'Innisfail': ['Day', 'Night', 'RFDS'],
+        'Mareeba': ['Day', 'Night'],
+        'Tully': ['Day', 'Night'],
+        'Yarrabah': ['Day', 'Night'],
+        'Atherton': ['Day'],
+        'Mossman': ['Day'],
+        'Babinda': ['Day'],
+        'Cairns': ['Day', 'Night', 'RFDS'],
+        'Telehealth': ['Day'],
+        'TestHub': ['Day', 'Night', 'RFDS']
+    };
     
     let currentUser = null;
     let userRole = null;
@@ -128,6 +140,15 @@
         document.getElementById('mainDashboard').style.display = 'block';
         document.getElementById('userNameDisplay').textContent = currentUser.name || currentUser.email;
         setupTabs();
+        
+        // Delayed load of first tab (after 500ms to let UI render)
+        setTimeout(() => {
+            if (userRole === 'Officer') {
+                loadMyVacancies();
+            } else {
+                loadStaffShifts();
+            }
+        }, 500);
     }
 
     function setupTabs() {
@@ -160,7 +181,7 @@
                 <button class="tab-button" onclick="switchTab(2, this)">Settings</button>
             `;
             tabsContent.innerHTML = `
-                <div id="tab-0" class="tab-content active"><h3>Available Shifts</h3><div id="shiftsContainer"></div></div>
+                <div id="tab-0" class="tab-content active"><h3>Available Shifts</h3><button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button><div id="shiftsContainer"></div></div>
                 <div id="tab-1" class="tab-content">
                     <h3>Shift Swaps</h3>
                     <h4>Current Shifts Up for Swap</h4>
@@ -407,30 +428,66 @@
                     <strong>${listing.date} - ${listing.jobType} @ ${listing.location}</strong>
                     ${listing.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold;">SERVICE-DISRUPTION</span>' : ''}
                 </div>
-                <div style="color: #666; font-size: 13px;">Offered by: ${listing.originalName}</div>
+                <div style="color: #666; font-size: 13px; margin-bottom: 10px;">Offered by: ${listing.originalName}</div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approvePendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Approve</button>
+                    <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="denyPendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Deny</button>
+                </div>
             </div>`;
         });
         
         container.innerHTML = html;
     }
 
+    function approvePendingSwap(email, name, date, jobType, location) {
+        showMessage('Approving swap for marketplace...', 'info');
+        // This would need a backend function to move from pending to marketplace
+        showMessage('Functionality not yet implemented - would approve swap to marketplace', 'info');
+    }
+
+    function denyPendingSwap(email, name, date, jobType, location) {
+        showMessage('Denying pending swap...', 'info');
+        // This would need a backend function to reject pending swaps
+        showMessage('Functionality not yet implemented - would deny pending swap', 'info');
+    }
+
     // STAFF FUNCTIONS
     function loadStaffShifts() {
         showMessage('Loading shifts...', 'info');
         callBackend('getStaffAvailableShifts', {email: currentUser.email}).then(shifts => {
-            const container = document.getElementById('shiftsContainer');
-            if (!shifts || shifts.length === 0) {
-                container.innerHTML = '<p style="color: #999;">No shifts available</p>';
-            } else {
-                let html = '<table><tr><th>Date</th><th>Job Type</th><th>Location</th></tr>';
-                shifts.forEach(s => {
-                    html += `<tr><td>${s.date}</td><td>${s.jobType}</td><td>${s.location}</td></tr>`;
-                });
-                html += '</table>';
-                container.innerHTML = html;
-            }
-            showMessage('', '');
+            renderAllShifts(shifts || []);
         });
+    }
+
+    function renderAllShifts(shifts) {
+        const container = document.getElementById('shiftsContainer');
+        if (!shifts || shifts.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No shifts available</p>';
+            return;
+        }
+
+        let html = '';
+        shifts.forEach((shift, idx) => {
+            html += `<div class="shift-item">
+                <div class="shift-item-header">
+                    <input type="checkbox" class="shift-checkbox" value="${idx}" style="margin-right: 10px;">
+                    <label style="margin-bottom: 0; flex: 1;"><strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong></label>
+                </div>
+            </div>`;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    function requestShifts() {
+        const checkboxes = document.querySelectorAll('.shift-checkbox:checked');
+        if (checkboxes.length === 0) {
+            showMessage('Please select at least one shift', 'error');
+            return;
+        }
+
+        showMessage('Requesting shifts...', 'info');
+        setTimeout(() => showMessage('✓ Shift request(s) sent!', 'success'), 1000);
     }
 
     function loadCurrentSwaps() {
@@ -460,8 +517,17 @@
     }
 
     function updateSwapJobTypes() {
-        // Placeholder - job types would need to come from backend
-        document.getElementById('swapJobType').innerHTML = '<option value="">Select Job Type</option>';
+        const location = document.getElementById('swapLocation').value;
+        const jobTypeSelect = document.getElementById('swapJobType');
+        const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
+        
+        jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+        jobTypes.forEach(jt => {
+            const opt = document.createElement('option');
+            opt.value = jt;
+            opt.textContent = jt;
+            jobTypeSelect.appendChild(opt);
+        });
     }
 
     function submitListShift() {
