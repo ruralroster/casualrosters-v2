@@ -39,17 +39,26 @@
         .message.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-family: inherit; }
         .location-item { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
         .location-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
         .location-item label { cursor: pointer; margin-bottom: 0; }
         .shift-item { background: #f9f9f9; border-left: 4px solid #000; padding: 15px; margin-bottom: 12px; border-radius: 4px; }
+        .shift-item.red { border-left-color: #dc3545; background: #ffe6e6; }
         .shift-item-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .shift-item-header strong { font-size: 16px; flex: 1; }
-        .shift-item-actions { display: flex; gap: 10px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th { background: #f0f0f0; padding: 12px; text-align: left; border-bottom: 1px solid #ddd; font-weight: 600; }
         td { padding: 12px; border-bottom: 1px solid #f0f0f0; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .modal-content h3 { margin-bottom: 20px; }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .fortnight-grid { display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px; margin: 15px 0; }
+        .fortnight-day { text-align: center; font-size: 11px; font-weight: 600; padding: 8px; background: #f0f0f0; border-radius: 3px; }
+        .fortnight-checkbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 3px; min-height: 80px; }
+        .fortnight-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -78,6 +87,30 @@
     </div>
 </div>
 
+<div id="denySwapModal" class="modal">
+    <div class="modal-content">
+        <h3>Deny Swap Request</h3>
+        <p>Provide a reason for denying this swap:</p>
+        <textarea id="denyReason" style="width: 100%; height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" placeholder="Enter reason..."></textarea>
+        <div class="modal-buttons">
+            <button class="btn-danger" onclick="submitDenySwap()">Deny Swap</button>
+            <button class="btn-secondary" onclick="closeDenyModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="fortnightModal" class="modal">
+    <div class="modal-content">
+        <h3>Select Available Days for Swap</h3>
+        <p>Check which days in this fortnight you can work:</p>
+        <div id="fortnightGrid"></div>
+        <div class="modal-buttons">
+            <button class="btn-primary" onclick="submitFortnightSelection()">Confirm</button>
+            <button class="btn-secondary" onclick="closeFortnightModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script>
     const BACKEND_URL = 'https://ruralrostersproxy-staging-168129620374.australia-southeast1.run.app';
     const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
@@ -97,6 +130,9 @@
     let currentUser = null;
     let userRole = null;
     let userLocations = [];
+    let officerLocations = [];
+    let pendingDenySwap = null;
+    let pendingFortnightSwap = null;
 
     async function callBackend(action, params) {
         try {
@@ -139,16 +175,17 @@
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainDashboard').style.display = 'block';
         document.getElementById('userNameDisplay').textContent = currentUser.name || currentUser.email;
-        setupTabs();
         
-        // Delayed load of first tab (after 500ms to let UI render)
-        setTimeout(() => {
-            if (userRole === 'Officer') {
-                loadMyVacancies();
-            } else {
-                loadStaffShifts();
-            }
-        }, 500);
+        if (userRole === 'Officer') {
+            callBackend('getOfficerLocations', {email: currentUser.email}).then(locs => {
+                officerLocations = locs || [];
+                setupTabs();
+                setTimeout(() => loadMyVacancies(), 500);
+            });
+        } else {
+            setupTabs();
+            setTimeout(() => loadStaffShifts(), 500);
+        }
     }
 
     function setupTabs() {
@@ -184,14 +221,14 @@
                 <div id="tab-0" class="tab-content active"><h3>Available Shifts</h3><button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button><div id="shiftsContainer"></div></div>
                 <div id="tab-1" class="tab-content">
                     <h3>Shift Swaps</h3>
-                    <h4>Current Shifts Up for Swap</h4>
+                    <h4>Current Shifts Up for Swap (Approved)</h4>
                     <div id="currentSwapsContainer"></div>
                     <h4 style="margin-top: 30px;">List a New Shift for Swap</h4>
                     <div class="form-group"><label>Date</label><input type="date" id="swapDate" /></div>
                     <div class="form-group"><label>Location</label><select id="swapLocation" onchange="updateSwapJobTypes()"><option value="">Select Location</option></select></div>
                     <div class="form-group"><label>Job Type</label><select id="swapJobType"><option value="">Select Job Type</option></select></div>
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;"><input type="checkbox" id="swapIsServiceDisruption" /><label for="swapIsServiceDisruption" style="margin-bottom: 0;">Service-disruption shift</label></div>
-                    <button class="btn-primary" onclick="submitListShift()">List Shift for Swap</button>
+                    <button class="btn-primary" onclick="openFortnightModal()">Select Available Days</button>
                 </div>
                 <div id="tab-2" class="tab-content">
                     <h3>Settings</h3>
@@ -221,7 +258,134 @@
         }
     }
 
+    // ============================================================
     // OFFICER FUNCTIONS
+    // ============================================================
+
+    function loadMyVacancies() {
+        showMessage('Loading vacancies...', 'info');
+        callBackend('getOfficerVacancies', {email: currentUser.email}).then(vacancies => {
+            renderVacancies(vacancies || []);
+        });
+    }
+
+    function renderVacancies(vacancies) {
+        const container = document.getElementById('vacanciesContainer');
+        
+        if (!vacancies || vacancies.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No vacancies yet</p>';
+            return;
+        }
+
+        let html = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr>';
+        
+        vacancies.forEach((vac) => {
+            let dateString = '';
+            if (vac.date && vac.date.includes('/')) {
+                const parts = vac.date.split('/');
+                if (parts.length === 3) {
+                    dateString = parts[2] + '-' + String(parts[1]).padStart(2, '0') + '-' + String(parts[0]).padStart(2, '0');
+                }
+            }
+            
+            html += `<tr>
+                <td><input type="date" class="vac-date" value="${dateString}" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td>
+                <td style="padding: 12px;">${vac.location}</td>
+                <td style="padding: 12px;">${vac.jobType}</td>
+                <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    }
+
+    function addVacancyRow() {
+        const container = document.getElementById('vacanciesContainer');
+        let table = container.querySelector('table');
+        
+        if (!table) {
+            container.innerHTML = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr></table>';
+            table = container.querySelector('table');
+        }
+        
+        const newRow = table.insertRow();
+        
+        let locHtml = '<select class="vac-location" onchange="updateNewRowJobTypes(this)" style="width: 100%; padding: 4px;"><option value="">Select Location</option>';
+        officerLocations.forEach(loc => {
+            locHtml += `<option value="${loc}">${loc}</option>`;
+        });
+        locHtml += '</select>';
+        
+        newRow.innerHTML = `<td><input type="date" class="vac-date" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td>
+        <td>${locHtml}</td>
+        <td><select class="vac-jobtype" style="width: 100%; padding: 4px;"><option value="">Select Job Type</option></select></td>
+        <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>`;
+    }
+
+    function updateNewRowJobTypes(select) {
+        const location = select.value;
+        const jobTypeSelect = select.parentElement.parentElement.querySelector('.vac-jobtype');
+        const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
+        
+        jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+        jobTypes.forEach(jt => {
+            const opt = document.createElement('option');
+            opt.value = jt;
+            opt.textContent = jt;
+            jobTypeSelect.appendChild(opt);
+        });
+    }
+
+    function removeVacancyRow(btn) {
+        btn.parentElement.parentElement.remove();
+    }
+
+    function saveVacancies() {
+        const rows = document.querySelectorAll('#vacanciesContainer table tr');
+        const vacancies = [];
+        
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const dateInput = row.querySelector('.vac-date');
+            const jobtypeSelect = row.querySelector('.vac-jobtype');
+            const locationSelect = row.querySelector('.vac-location');
+            
+            if (dateInput && jobtypeSelect && locationSelect) {
+                let date = dateInput.value;
+                const jobType = jobtypeSelect.value;
+                const location = locationSelect.value;
+                
+                if (date && date.includes('-')) {
+                    const [year, month, day] = date.split('-');
+                    date = day + '/' + month + '/' + year;
+                }
+                
+                if (date && jobType && location) {
+                    vacancies.push({ date, jobType, location });
+                }
+            }
+        }
+
+        if (vacancies.length === 0) {
+            showMessage('No valid vacancies to save', 'error');
+            return;
+        }
+
+        showMessage('Saving vacancies...', 'info');
+
+        callBackend('saveOfficerVacancies', {
+            email: currentUser.email,
+            vacancies: vacancies
+        }).then(result => {
+            if (result.error) {
+                showMessage(result.error, 'error');
+            } else {
+                showMessage('✓ Vacancies saved', 'success');
+                loadMyVacancies();
+            }
+        });
+    }
+
     function loadOfficerApprovals() {
         showMessage('Loading approvals...', 'info');
         callBackend('getOfficerPendingApprovals', {email: currentUser.email}).then(claims => {
@@ -301,109 +465,6 @@
         });
     }
 
-    function loadMyVacancies() {
-        showMessage('Loading vacancies...', 'info');
-        callBackend('getOfficerVacancies', {email: currentUser.email}).then(vacancies => {
-            renderVacancies(vacancies || []);
-        });
-    }
-
-    function renderVacancies(vacancies) {
-        const container = document.getElementById('vacanciesContainer');
-        
-        if (!vacancies || vacancies.length === 0) {
-            container.innerHTML = '<p style="color: #999;">No vacancies yet</p>';
-            return;
-        }
-
-        let html = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr>';
-        
-        vacancies.forEach((vac) => {
-            let dateString = '';
-            if (vac.date && vac.date.includes('/')) {
-                const parts = vac.date.split('/');
-                if (parts.length === 3) {
-                    dateString = parts[2] + '-' + String(parts[1]).padStart(2, '0') + '-' + String(parts[0]).padStart(2, '0');
-                }
-            }
-            
-            html += `<tr>
-                <td><input type="date" class="vac-date" value="${dateString}" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td>
-                <td style="padding: 12px;">${vac.location}</td>
-                <td style="padding: 12px;">${vac.jobType}</td>
-                <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
-            </tr>`;
-        });
-        html += '</table>';
-        container.innerHTML = html;
-    }
-
-    function addVacancyRow() {
-        const container = document.getElementById('vacanciesContainer');
-        let table = container.querySelector('table');
-        
-        if (!table) {
-            container.innerHTML = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr></table>';
-            table = container.querySelector('table');
-        }
-        
-        const newRow = table.insertRow();
-        newRow.innerHTML = `<td><input type="date" class="vac-date" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td>
-        <td><input type="text" class="vac-location" placeholder="Location" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td>
-        <td><input type="text" class="vac-jobtype" placeholder="Job Type" style="width: 100%; padding: 4px; border: 1px solid #ddd;"></td>
-        <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>`;
-    }
-
-    function removeVacancyRow(btn) {
-        btn.parentElement.parentElement.remove();
-    }
-
-    function saveVacancies() {
-        const rows = document.querySelectorAll('#vacanciesContainer table tr');
-        const vacancies = [];
-        
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            const dateInput = row.querySelector('.vac-date');
-            const jobtypeInput = row.querySelector('.vac-jobtype');
-            const locationInput = row.querySelector('.vac-location');
-            
-            if (dateInput && jobtypeInput && locationInput) {
-                let date = dateInput.value;
-                const jobType = jobtypeInput.value;
-                const location = locationInput.value;
-                
-                if (date && date.includes('-')) {
-                    const [year, month, day] = date.split('-');
-                    date = day + '/' + month + '/' + year;
-                }
-                
-                if (date && jobType && location) {
-                    vacancies.push({ date, jobType, location });
-                }
-            }
-        }
-
-        if (vacancies.length === 0) {
-            showMessage('No valid vacancies to save', 'error');
-            return;
-        }
-
-        showMessage('Saving vacancies...', 'info');
-
-        callBackend('saveOfficerVacancies', {
-            email: currentUser.email,
-            vacancies: vacancies
-        }).then(result => {
-            if (result.error) {
-                showMessage(result.error, 'error');
-            } else {
-                showMessage('✓ Vacancies saved', 'success');
-                loadMyVacancies();
-            }
-        });
-    }
-
     function loadPendingSwaps() {
         showMessage('Loading pending swaps...', 'info');
         callBackend('getOfficerMarketplaceListings', {email: currentUser.email}).then(listings => {
@@ -430,8 +491,8 @@
                 </div>
                 <div style="color: #666; font-size: 13px; margin-bottom: 10px;">Offered by: ${listing.originalName}</div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approvePendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Approve</button>
-                    <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="denyPendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Deny</button>
+                    <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approvePendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Approve to Marketplace</button>
+                    <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openDenySwapModal('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Deny</button>
                 </div>
             </div>`;
         });
@@ -440,18 +501,63 @@
     }
 
     function approvePendingSwap(email, name, date, jobType, location) {
-        showMessage('Approving swap for marketplace...', 'info');
-        // This would need a backend function to move from pending to marketplace
-        showMessage('Functionality not yet implemented - would approve swap to marketplace', 'info');
+        showMessage('Approving pending swap for marketplace...', 'info');
+        // Backend will need approvePendingSwap function
+        callBackend('approvePendingSwap', {
+            staffEmail: email,
+            staffName: name,
+            date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { 
+                showMessage('✓ Swap approved and moved to marketplace', 'success'); 
+                loadPendingSwaps();
+            }
+        });
     }
 
-    function denyPendingSwap(email, name, date, jobType, location) {
-        showMessage('Denying pending swap...', 'info');
-        // This would need a backend function to reject pending swaps
-        showMessage('Functionality not yet implemented - would deny pending swap', 'info');
+    function openDenySwapModal(email, name, date, jobType, location) {
+        pendingDenySwap = { email, name, date, jobType, location };
+        document.getElementById('denySwapModal').classList.add('active');
+        document.getElementById('denyReason').value = '';
     }
 
+    function closeDenyModal() {
+        document.getElementById('denySwapModal').classList.remove('active');
+        pendingDenySwap = null;
+    }
+
+    function submitDenySwap() {
+        if (!pendingDenySwap) return;
+        
+        const reason = document.getElementById('denyReason').value.trim();
+        if (!reason) {
+            showMessage('Please provide a reason', 'error');
+            return;
+        }
+
+        showMessage('Denying swap...', 'info');
+        callBackend('denySwapWithReason', {
+            staffEmail: pendingDenySwap.email,
+            staffName: pendingDenySwap.name,
+            date: pendingDenySwap.date,
+            jobType: pendingDenySwap.jobType,
+            location: pendingDenySwap.location,
+            reason: reason
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else {
+                showMessage('✓ Swap denied and email sent', 'success');
+                closeDenyModal();
+                loadPendingSwaps();
+            }
+        });
+    }
+
+    // ============================================================
     // STAFF FUNCTIONS
+    // ============================================================
+
     function loadStaffShifts() {
         showMessage('Loading shifts...', 'info');
         callBackend('getStaffAvailableShifts', {email: currentUser.email}).then(shifts => {
@@ -486,15 +592,31 @@
             return;
         }
 
-        showMessage('Requesting shifts...', 'info');
-        setTimeout(() => showMessage('✓ Shift request(s) sent!', 'success'), 1000);
+        showMessage('Sending shift requests...', 'info');
+        callBackend('requestShifts', {
+            email: currentUser.email,
+            name: currentUser.name,
+            shifts: Array.from(checkboxes).map(cb => {
+                const item = cb.parentElement.parentElement;
+                const text = item.querySelector('label strong').textContent;
+                const [date, jobAndLocation] = text.split(' - ');
+                const [jobType, location] = jobAndLocation.split(' @ ');
+                return { date: date.trim(), jobType: jobType.trim(), location: location.trim() };
+            })
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else {
+                showMessage('✓ Shift requests sent!', 'success');
+                Array.from(checkboxes).forEach(cb => cb.checked = false);
+            }
+        });
     }
 
     function loadCurrentSwaps() {
         callBackend('getMarketplaceListings', {email: currentUser.email}).then(swaps => {
             const container = document.getElementById('currentSwapsContainer');
             if (!swaps || swaps.length === 0) {
-                container.innerHTML = '<p style="color: #999;">No shifts currently listed for swap</p>';
+                container.innerHTML = '<p style="color: #999;">No shifts currently available for swap (awaiting officer approval)</p>';
             } else {
                 let html = '';
                 swaps.forEach(s => {
@@ -530,14 +652,70 @@
         });
     }
 
-    function submitListShift() {
+    function openFortnightModal() {
         const date = document.getElementById('swapDate').value;
         const location = document.getElementById('swapLocation').value;
         const jobType = document.getElementById('swapJobType').value;
-        const isServiceDisruption = document.getElementById('swapIsServiceDisruption').checked;
 
         if (!date || !location || !jobType) {
-            showMessage('Please fill in all fields', 'error');
+            showMessage('Please fill in Date, Location, and Job Type first', 'error');
+            return;
+        }
+
+        pendingFortnightSwap = { date, location, jobType };
+        renderFortnightGrid(date);
+        document.getElementById('fortnightModal').classList.add('active');
+    }
+
+    function renderFortnightGrid(dateStr) {
+        const container = document.getElementById('fortnightGrid');
+        
+        // Parse date
+        const [year, month, day] = dateStr.split('-');
+        const shiftDate = new Date(year, parseInt(month) - 1, parseInt(day));
+        
+        // Find start of fortnight (every fortnight starts on a Monday)
+        const fortnightStart = new Date(shiftDate);
+        const dayOfWeek = fortnightStart.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
+        fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
+
+        let html = '<div class="fortnight-grid">';
+        
+        // Day headers
+        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        for (let i = 0; i < 14; i++) {
+            const d = new Date(fortnightStart);
+            d.setDate(d.getDate() + i);
+            const dayName = dayNames[i % 7];
+            const dateNum = d.getDate();
+            html += `<div class="fortnight-day">${dayName}<br>${dateNum}</div>`;
+        }
+
+        // Checkboxes for Day Shifts
+        html += '</div><div style="margin-top: 20px;"><h4>Day Shifts</h4><div class="fortnight-grid">';
+        for (let i = 0; i < 14; i++) {
+            html += `<div class="fortnight-checkbox"><input type="checkbox" class="fortnight-day-checkbox" value="${i}"><label style="margin-bottom: 0; font-size: 11px;">Day</label></div>`;
+        }
+        html += '</div></div>';
+
+        // Checkboxes for Night Shifts
+        html += '<div style="margin-top: 20px;"><h4>Night Shifts</h4><div class="fortnight-grid">';
+        for (let i = 0; i < 14; i++) {
+            html += `<div class="fortnight-checkbox"><input type="checkbox" class="fortnight-night-checkbox" value="${i}"><label style="margin-bottom: 0; font-size: 11px;">Night</label></div>`;
+        }
+        html += '</div></div>';
+
+        container.innerHTML = html;
+    }
+
+    function submitFortnightSelection() {
+        const dayChecks = Array.from(document.querySelectorAll('.fortnight-day-checkbox:checked')).map(cb => `Day-${cb.value}`);
+        const nightChecks = Array.from(document.querySelectorAll('.fortnight-night-checkbox:checked')).map(cb => `Night-${cb.value}`);
+        const selectedDays = [...dayChecks, ...nightChecks];
+
+        if (selectedDays.length === 0) {
+            showMessage('Please select at least one day', 'error');
             return;
         }
 
@@ -545,18 +723,28 @@
         callBackend('listShiftForSwap', {
             email: currentUser.email,
             name: currentUser.name,
-            date, jobType, location, isServiceDisruption
+            date: pendingFortnightSwap.date,
+            jobType: pendingFortnightSwap.jobType,
+            location: pendingFortnightSwap.location,
+            isServiceDisruption: document.getElementById('swapIsServiceDisruption').checked,
+            availableDays: selectedDays
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else {
-                showMessage('✓ Swap request submitted!', 'success');
+                showMessage('✓ Swap request submitted! Awaiting officer approval.', 'success');
                 document.getElementById('swapDate').value = '';
                 document.getElementById('swapLocation').value = '';
                 document.getElementById('swapJobType').value = '';
                 document.getElementById('swapIsServiceDisruption').checked = false;
+                closeFortnightModal();
                 loadCurrentSwaps();
             }
         });
+    }
+
+    function closeFortnightModal() {
+        document.getElementById('fortnightModal').classList.remove('active');
+        pendingFortnightSwap = null;
     }
 
     function loadLocationCheckboxes() {
