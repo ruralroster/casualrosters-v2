@@ -896,11 +896,11 @@ async function approvePendingSwap(staffEmail, staffName, date, jobType, location
     const listingsRows = listingsResponse.data.values || [];
     let availableDays = '';
 
-    for (let i = 1; i < listingsRows.length; i++) {
+    for (let i = 0; i < listingsRows.length; i++) {
       if (listingsRows[i][0] === staffEmail && listingsRows[i][2] === date && listingsRows[i][3] === jobType && listingsRows[i][4] === location) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `Marketplace Listings!F${i + 1}`,
+          range: `Marketplace Listings!F${i + 2}`,
           valueInputOption: 'RAW',
           resource: { values: [['Available']] }
         });
@@ -936,11 +936,11 @@ async function denySwapWithReason(staffEmail, staffName, date, jobType, location
     });
     const listingsRows = listingsResponse.data.values || [];
 
-    for (let i = 1; i < listingsRows.length; i++) {
+    for (let i = 0; i < listingsRows.length; i++) {
       if (listingsRows[i][0] === staffEmail && listingsRows[i][2] === date && listingsRows[i][3] === jobType && listingsRows[i][4] === location) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `Marketplace Listings!F${i + 1}`,
+          range: `Marketplace Listings!F${i + 2}`,
           valueInputOption: 'RAW',
           resource: { values: [['Denied']] }
         });
