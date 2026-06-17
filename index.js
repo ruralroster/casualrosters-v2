@@ -156,7 +156,7 @@ const server = http.createServer((req, res) => {
 });
 
 // ============================================================================
-// ALL PHASE 1 FUNCTIONS (from working version)
+// BACKEND FUNCTIONS
 // ============================================================================
 
 async function checkUserExists(email, password) {
@@ -170,7 +170,10 @@ async function checkUserExists(email, password) {
     const normalizedEmail = email.toLowerCase().trim();
 
     for (let row of rows) {
-      if (row[0] && String(row[0]).toLowerCase().trim() === normalizedEmail && row[4] === password) {
+      const rowEmail = String(row[0]).toLowerCase().trim();
+      const rowPassword = String(row[4]).trim();
+      
+      if (rowEmail === normalizedEmail && rowPassword === password) {
         return {
           email: row[0],
           name: row[1],
@@ -197,9 +200,11 @@ async function getOfficerLocations(email) {
 
     const rows = result.data.values || [];
     const locations = [];
+    const normalizedEmail = String(email).toLowerCase().trim();
 
     for (let row of rows) {
-      if (row[2] === email) {
+      const rowEmail = String(row[2]).toLowerCase().trim();
+      if (rowEmail === normalizedEmail) {
         const location = String(row[0]).trim();
         if (location && !locations.includes(location)) {
           locations.push(location);
@@ -831,32 +836,6 @@ async function saveOfficerVacancies(email, vacancies) {
 
     const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
     
-    for (let location of locations) {
-      if (!locationNames.includes(location)) continue;
-      
-      const sheetName = `Vacancies - ${location}`;
-      
-      try {
-        const result = await sheets.spreadsheets.values.get({
-          spreadsheetId: SHEET_ID,
-          range: `${sheetName}!A2:D`
-        });
-
-        const existingRows = result.data.values || [];
-        
-        for (let i = existingRows.length - 1; i >= 0; i--) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `${sheetName}!A${i + 2}:D${i + 2}`,
-            valueInputOption: 'RAW',
-            resource: { values: [[]] }
-          });
-        }
-      } catch (err) {
-        console.log(`Sheet ${sheetName} might not exist yet, continuing...`);
-      }
-    }
-
     const vacanciesByLocation = {};
     for (let vac of vacancies) {
       const loc = vac.location;
@@ -1043,10 +1022,6 @@ async function denyShiftRequest(email, name, date, jobType, location) {
     return { error: err.toString() };
   }
 }
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
 
 function formatDate(dateVal) {
   if (!dateVal) return '';
