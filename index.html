@@ -299,6 +299,22 @@
         container.innerHTML = html;
     }
 
+    function updateNewRowJobTypes(locationSelect) {
+        const location = locationSelect.value;
+        const row = locationSelect.closest('tr');
+        const jobTypeSelect = row.querySelector('.vac-jobtype');
+        
+        if (!location || !JOB_TYPES_BY_LOCATION[location]) {
+            jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+            return;
+        }
+        
+        jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+        JOB_TYPES_BY_LOCATION[location].forEach(jobType => {
+            jobTypeSelect.innerHTML += `<option value="${jobType}">${jobType}</option>`;
+        });
+    }
+
     function addVacancyRow() {
         const container = document.getElementById('vacanciesContainer');
         let table = container.querySelector('table');
