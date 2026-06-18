@@ -120,6 +120,9 @@ const server = http.createServer((req, res) => {
         case 'getOfficerPendingApprovals':
           result = await getOfficerPendingApprovals(params.email);
           break;
+        case 'getOfficerPastApprovals':
+          result = await getOfficerPastApprovals(params.email);
+          break;
         case 'approveSwap':
           result = await approveSwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location);
           break;
@@ -630,14 +633,14 @@ async function getOfficerPendingApprovals(email) {
     
     const claims = [];
 
-    // Get swap claims
+    // Get swap claims - ONLY PENDING
     const claimsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:I'
+      range: 'Marketplace Claims!A2:J'
     });
 
     const claimsRows = claimsResponse.data.values || [];
-    for (let i = 1; i < claimsRows.length; i++) {
+    for (let i = 0; i < claimsRows.length; i++) {
       if (claimsRows[i][4] && locations.includes(claimsRows[i][6]) && claimsRows[i][8] && claimsRows[i][8].toUpperCase() === 'PENDING') {
         claims.push({
           type: 'swap_claim',
@@ -653,14 +656,14 @@ async function getOfficerPendingApprovals(email) {
       }
     }
 
-    // Get shift requests
+    // Get shift requests - ONLY PENDING
     const requestsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Requests!A2:G'
+      range: 'Requests!A2:I'
     });
 
     const requestsRows = requestsResponse.data.values || [];
-    for (let i = 1; i < requestsRows.length; i++) {
+    for (let i = 0; i < requestsRows.length; i++) {
       if (requestsRows[i][5] && locations.includes(requestsRows[i][5]) && requestsRows[i][6] && requestsRows[i][6].toUpperCase() === 'PENDING') {
         claims.push({
           type: 'shift_request',
@@ -684,26 +687,48 @@ async function getOfficerPendingApprovals(email) {
 async function approveSwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location) {
   try {
     console.log(`Approving swap: ${claimingName} claims ${originalName}'s shift`);
+    
+    const resolvedTimestamp = new Date().toLocaleString();
 
     const claimsResult = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:I'
+      range: 'Marketplace Claims!A2:J'
     });
 
     const claimRows = claimsResult.data.values || [];
+    const otherApplicants = [];
+    
+    // Find the approved applicant and all other pending applicants for this shift
     for (let i = 0; i < claimRows.length; i++) {
-      if (claimRows[i][0] === claimingEmail && 
-          claimRows[i][2] === originalEmail && 
-          claimRows[i][4] === date && 
-          claimRows[i][5] === jobType) {
-        
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Marketplace Claims!I${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Approved']] }
-        });
-        break;
+      const claimDate = String(claimRows[i][4]).trim();
+      const claimJobType = String(claimRows[i][5]).trim();
+      const claimLocation = String(claimRows[i][6]).trim();
+      const claimStatus = String(claimRows[i][8]).trim();
+      
+      if (claimDate === date && claimJobType === jobType && claimLocation === location) {
+        if (claimRows[i][0] === claimingEmail && claimRows[i][2] === originalEmail) {
+          // This is the approved applicant
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `Marketplace Claims!I${i + 2}:J${i + 2}`,
+            valueInputOption: 'RAW',
+            resource: { values: [['Approved', resolvedTimestamp]] }
+          });
+        } else if (claimStatus === 'Pending') {
+          // This is another pending applicant for the same shift - auto-deny them
+          otherApplicants.push({
+            email: claimRows[i][0],
+            name: claimRows[i][1],
+            rowIndex: i
+          });
+          
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `Marketplace Claims!I${i + 2}:J${i + 2}`,
+            valueInputOption: 'RAW',
+            resource: { values: [['Denied', resolvedTimestamp]] }
+          });
+        }
       }
     }
 
@@ -728,6 +753,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       }
     }
 
+    // Send approval email to approved applicant
     const approveMail = `<p>Dear ${claimingName},</p>
 <p>Your request to cover the shift has been <strong>APPROVED</strong>:</p>
 <p><strong>${date} - ${jobType} @ ${location}</strong></p>
@@ -741,6 +767,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       html: approveMail
     });
 
+    // Send notification to original staff member
     const originalMail = `<p>Dear ${originalName},</p>
 <p>Your shift swap request has been <strong>APPROVED</strong>:</p>
 <p><strong>${date} - ${jobType} @ ${location}</strong></p>
@@ -753,6 +780,21 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       html: originalMail
     });
 
+    // Send denial emails to all other applicants
+    for (let applicant of otherApplicants) {
+      const denyMail = `<p>Dear ${applicant.name},</p>
+<p>Unfortunately, another applicant was approved for the following shift:</p>
+<p><strong>${date} - ${jobType} @ ${location}</strong></p>
+<p>Please try again for future shifts.</p>`;
+
+      await transporter.sendMail({
+        from: GMAIL_USER,
+        to: applicant.email,
+        subject: `[Rural Rosters] Shift Swap - Another Applicant Approved`,
+        html: denyMail
+      });
+    }
+
     return { success: true, message: 'Swap approved and emails sent' };
   } catch (err) {
     console.error('approveSwap error:', err);
@@ -763,10 +805,12 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
 async function denySwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location) {
   try {
     console.log(`Denying swap: ${claimingName} claim rejected`);
+    
+    const resolvedTimestamp = new Date().toLocaleString();
 
     const claimsResult = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:I'
+      range: 'Marketplace Claims!A2:J'
     });
 
     const claimRows = claimsResult.data.values || [];
@@ -777,30 +821,9 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
         
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `Marketplace Claims!I${i + 2}`,
+          range: `Marketplace Claims!I${i + 2}:J${i + 2}`,
           valueInputOption: 'RAW',
-          resource: { values: [['Rejected']] }
-        });
-        break;
-      }
-    }
-
-    const listingResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H'
-    });
-
-    const listingRows = listingResult.data.values || [];
-    for (let i = 0; i < listingRows.length; i++) {
-      if (listingRows[i][0] === originalEmail && 
-          listingRows[i][2] === date && 
-          listingRows[i][3] === jobType) {
-        
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Marketplace Listings!F${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Available']] }
+          resource: { values: [['Denied', resolvedTimestamp]] }
         });
         break;
       }
@@ -817,7 +840,7 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
       html: denyMail
     });
 
-    return { success: true, message: 'Swap denied and emails sent' };
+    return { success: true, message: 'Swap denied and email sent' };
   } catch (err) {
     console.error('denySwap error:', err);
     return { error: err.toString() };
@@ -1034,6 +1057,105 @@ function formatDate(dateVal) {
   }
   
   return String(dateVal);
+}
+
+async function getOfficerPastApprovals(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+    
+    const pastApprovals = {};
+
+    // Get resolved swap claims (Approved or Denied)
+    const claimsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Marketplace Claims!A2:J'
+    });
+
+    const claimsRows = claimsResponse.data.values || [];
+    for (let i = 0; i < claimsRows.length; i++) {
+      const status = String(claimsRows[i][8]).trim().toUpperCase();
+      if (claimsRows[i][4] && locations.includes(claimsRows[i][6]) && (status === 'APPROVED' || status === 'DENIED')) {
+        const shiftKey = claimsRows[i][4] + '|' + claimsRows[i][5] + '|' + claimsRows[i][6];
+        
+        if (!pastApprovals[shiftKey]) {
+          pastApprovals[shiftKey] = {
+            date: claimsRows[i][4],
+            jobType: claimsRows[i][5],
+            location: claimsRows[i][6],
+            approved: null,
+            denied: [],
+            resolvedDate: null
+          };
+        }
+        
+        if (status === 'APPROVED') {
+          pastApprovals[shiftKey].approved = {
+            email: claimsRows[i][0],
+            name: claimsRows[i][1]
+          };
+          pastApprovals[shiftKey].resolvedDate = claimsRows[i][9] || claimsRows[i][7];
+        } else {
+          pastApprovals[shiftKey].denied.push({
+            email: claimsRows[i][0],
+            name: claimsRows[i][1]
+          });
+          pastApprovals[shiftKey].resolvedDate = claimsRows[i][9] || claimsRows[i][7];
+        }
+      }
+    }
+
+    // Get resolved shift requests (Approved or Denied)
+    const requestsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Requests!A2:I'
+    });
+
+    const requestsRows = requestsResponse.data.values || [];
+    for (let i = 0; i < requestsRows.length; i++) {
+      const status = String(requestsRows[i][6]).trim().toUpperCase();
+      if (requestsRows[i][5] && locations.includes(requestsRows[i][5]) && (status === 'APPROVED' || status === 'DENIED')) {
+        const shiftKey = requestsRows[i][3] + '|' + requestsRows[i][4] + '|' + requestsRows[i][5];
+        
+        if (!pastApprovals[shiftKey]) {
+          pastApprovals[shiftKey] = {
+            date: requestsRows[i][3],
+            jobType: requestsRows[i][4],
+            location: requestsRows[i][5],
+            approved: null,
+            denied: [],
+            resolvedDate: null
+          };
+        }
+        
+        if (status === 'APPROVED') {
+          pastApprovals[shiftKey].approved = {
+            email: requestsRows[i][1],
+            name: requestsRows[i][2]
+          };
+          pastApprovals[shiftKey].resolvedDate = requestsRows[i][7] || requestsRows[i][0];
+        } else {
+          pastApprovals[shiftKey].denied.push({
+            email: requestsRows[i][1],
+            name: requestsRows[i][2]
+          });
+          pastApprovals[shiftKey].resolvedDate = requestsRows[i][7] || requestsRows[i][0];
+        }
+      }
+    }
+
+    // Convert to array and sort by shift date descending
+    const result = Object.values(pastApprovals);
+    result.sort((a, b) => {
+      const dateA = new Date(a.date.split('/').reverse().join('-'));
+      const dateB = new Date(b.date.split('/').reverse().join('-'));
+      return dateB - dateA;
+    });
+
+    return result;
+  } catch (err) {
+    console.error('getOfficerPastApprovals error:', err);
+    return [];
+  }
 }
 
 // Start server
