@@ -1,1165 +1,695 @@
-/**
- * Rural Rosters Backend - Phase 2 with Marketplace + New Features
- * Uses embedded service account credentials (proven working pattern)
- */
-
-const http = require('http');
-const { google } = require('googleapis');
-const { JWT } = require('google-auth-library');
-const nodemailer = require('nodemailer');
-
-// Service account credentials (embedded - WORKING PATTERN)
-const SERVICE_ACCOUNT = {
-  type: "service_account",
-  project_id: "rural-rosters",
-  private_key_id: "3f30d8812c36bf4d32ab0492eee60ae27f27d829",
-  private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDsvjaq0OtGrXFL\nXq0122BUAjKwq3Z9zlD9K6n6EVyoH9gojRnpoodqHSJY3EIq3xdRzXKiK8nly9Qi\ndTyRVmS/YR5t4TNFfIi01vOek23tj2wmU2iqPO2VSmyLOgVCEu/qjTVrd/D6X3OQ\n2h7ueXgtbOJWuTf3WPZ/LJ2XG6SIv2cRODOlQ0dMjsJOAlVAPU3XGlXGJvBfqt13\n2UA/jwbNr7oDa2q3l7aP8O1FJIRgzrKEkJ78kFse/V0lBN0CyDbXtIL3jx5cJpom\npd1pJCgDgciXzPem0H2btMlHjFcRjuFk8D8gcNDxEj0iBqsFD+EFhQjZIHGGz1JA\nnTxl0u6HAgMBAAECggEAVPZu6B7SUSst3b68qvdwOrYPOxhODhhdOH7TIcvZVP0Y\ntnTtN8v8jTinevyRQpGN7O2ulkTg0He2SieI9R/sSEKyiPypSebHqR77j42ZhghS\n5+5HQdFb8pgjHFRWTsA9GhBTe54v/asD7phZQXyWhLbvA/C1BTAIRtvcMr7Y7boS\nrpYgb1OQpEXUkcAmu6Elf0UvrgcqYmB4t17m2ky1/kNqyIxtGIWviWHr1zHtfabn\nrlMjixNEJzXVS0ju15d69aIPj44+C2NQkJN8qotgOTv+aU+Eg4FzUqV4YF5JR09Q\npYvqFwO1S2WaenmUU4DhEB4UVXis85rR13h/3ycvAQKBgQD3TXcqDNLV7BL3G4BD\n0ujd5750gaIkVJeqgWGGHNDCz+TaVfOPu8FwG4nxbRlgYHyvlWFzWCk9zpoj9BYw\nhkTV/z0MzGIUGIpXE1O8u8aGM/k9Xbq6gyc0VPaCWRbYQ2YdSlLWKaqNsJxrGHJY\nvKVquLaHIMvE4xnf4F6ttYGOCwKBgQD1Ea1ehWnTVnyReKOWLM8GvnsQbV6RE6oQ\n6xCmW02WazrterZQTocfoSSTbdYl6+Wh4EOGkVirIcfrghr4whqvxEw3SHT9ckSI\n3fymchE8wPIrYwTaXRDUucKvW5QKaZTTjOT9Tr53VRC/7Mzu4AsnDRPFE8q4skC1\nDONlria69QKBgDoISKVqevNOQakRIAlKbfDc1/mZDgZ+f1S4pb0F+AsvI+IEd3JM\nOflnzPgFhQXzvm6pnEOn9Y2WdN9pAOgEKhUZnybosz9J/vSuCWFpow2NFrjKzO3F\npyaFpY8y/sRjFIxdC5FMF8TGI/6RrwuZwSuJCvQswwSB0mmRykXzKOK/AoGAQLEN\n5umo6dTmxS/nXvktHUajDc8RK5LZTeX/Wyq27IIZ6B6Aiepw2PScxx4zbYc78uNU\nb+1mTqZ4M78Ah7IVgVh8FgvWdiD33nla/EUQL8VvJ+zXlx0CGGWA8vFlvunoE4AZ\n4pQqyy11YnSMFHKn/wMAuQFkfiTv19szG+BA8RECgYEApNOwO4Hq7IXsHJeERoB/\n0HdtJtFpfo09xUD/grjipzCzKF/fJgapHCFq7a5l56igwbVehQKTMHiV8BHs4GeI\nmQ85Bd9w14NdlK1YfufpcPylP701JsGvzDPtUaGyZ/3cPxjQlCPJIoLp/YQeXNa0\nieXG73xh8R9zF2AECz1Tk6E=\n-----END PRIVATE KEY-----\n",
-  client_email: "rural-rosters-backend@rural-rosters.iam.gserviceaccount.com",
-  client_id: "110632316482172106567",
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/rural-rosters-backend%40rural-rosters.iam.gserviceaccount.com",
-  universe_domain: "googleapis.com"
+const BACKEND_URL = 'https://ruralrostersproxy-staging-168129620374.australia-southeast1.run.app';
+const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
+const JOB_TYPES_BY_LOCATION = {
+    'Innisfail': ['Day', 'Night', 'RFDS'],
+    'Mareeba': ['Day', 'Night'],
+    'Tully': ['Day', 'Night'],
+    'Yarrabah': ['Day', 'Night'],
+    'Atherton': ['Day'],
+    'Mossman': ['Day'],
+    'Babinda': ['Day'],
+    'Cairns': ['Day', 'Night', 'RFDS'],
+    'Telehealth': ['Day'],
+    'TestHub': ['Day', 'Night', 'RFDS']
 };
 
-// Gmail credentials
-const GMAIL_USER = 'ruralroster@gmail.com';
-const GMAIL_APP_PASSWORD = 'gckg msat pnzq ltug';
+let currentUser = null;
+let userRole = null;
+let userLocations = [];
+let officerLocations = [];
+let pendingDenySwap = null;
+let pendingFortnightSwap = null;
 
-const SHEET_ID = '1iG4SwN4LzFnzKNht2uy8R8YV6XKIftRTbmfW7_YZwtM';
-
-// Initialize JWT client for Sheets
-const auth = new JWT({
-  email: SERVICE_ACCOUNT.client_email,
-  key: SERVICE_ACCOUNT.private_key,
-  scopes: ['https://www.googleapis.com/auth/spreadsheets']
-});
-
-const sheets = google.sheets({ version: 'v4', auth });
-
-// Initialize Nodemailer
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: GMAIL_USER,
-    pass: GMAIL_APP_PASSWORD
-  }
-});
-
-console.log('Credentials initialized');
-
-// HTTP Server
-const server = http.createServer((req, res) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Content-Type', 'application/json');
-
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
-
-  // Health check
-  if (req.method === 'GET' && req.url === '/') {
-    res.writeHead(200);
-    res.end(JSON.stringify({ status: 'ok', service: 'Rural Rosters API' }));
-    return;
-  }
-
-  // Only POST
-  if (req.method !== 'POST') {
-    res.writeHead(405);
-    res.end(JSON.stringify({ error: 'Method not allowed' }));
-    return;
-  }
-
-  // Parse body
-  let body = '';
-  req.on('data', chunk => body += chunk);
-  req.on('end', async () => {
+async function callBackend(action, params) {
     try {
-      const { action, params } = JSON.parse(body);
-      console.log('Action:', action);
-
-      let result;
-      switch (action) {
-        case 'checkUserExists':
-          result = await checkUserExists(params.email, params.password);
-          break;
-        case 'getOfficerLocations':
-          result = await getOfficerLocations(params.email);
-          break;
-        case 'getOfficerVacancies':
-          result = await getOfficerVacancies(params.email);
-          break;
-        case 'getStaffAvailableShifts':
-          result = await getStaffAvailableShifts(params.email);
-          break;
-        case 'requestShifts':
-          result = await requestShifts(params.email, params.name, params.shifts);
-          break;
-        case 'listShiftForSwap':
-          result = await listShiftForSwap(params.email, params.name, params.date, params.jobType, params.location, params.isServiceDisruption, params.availableDays);
-          break;
-        case 'getMarketplaceListings':
-          result = await getMarketplaceListings(params.email);
-          break;
-        case 'claimShift':
-          result = await claimShift(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.date, params.jobType, params.location);
-          break;
-        case 'getOfficerMarketplaceListings':
-          result = await getOfficerMarketplaceListings(params.email);
-          break;
-        case 'getOfficerPendingApprovals':
-          result = await getOfficerPendingApprovals(params.email);
-          break;
-        case 'getOfficerPastApprovals':
-          result = await getOfficerPastApprovals(params.email);
-          break;
-        case 'approveSwap':
-          result = await approveSwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location);
-          break;
-        case 'denySwap':
-          result = await denySwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location);
-          break;
-        case 'saveOfficerVacancies':
-          result = await saveOfficerVacancies(params.email, params.vacancies);
-          break;
-        case 'approvePendingSwap':
-          result = await approvePendingSwap(params.staffEmail, params.staffName, params.date, params.jobType, params.location);
-          break;
-        case 'denySwapWithReason':
-          result = await denySwapWithReason(params.staffEmail, params.staffName, params.date, params.jobType, params.location, params.reason);
-          break;
-        case 'approveShiftRequest':
-          result = await approveShiftRequest(params.email, params.name, params.date, params.jobType, params.location);
-          break;
-        case 'denyShiftRequest':
-          result = await denyShiftRequest(params.email, params.name, params.date, params.jobType, params.location);
-          break;
-        default:
-          result = { error: 'Unknown action: ' + action };
-      }
-
-      res.writeHead(200);
-      res.end(JSON.stringify(result));
-    } catch (err) {
-      console.error('Error:', err);
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: err.toString() }));
+        const response = await fetch(BACKEND_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action, params})
+        });
+        return await response.json();
+    } catch(err) {
+        console.error('Backend error:', err);
+        return { error: err.toString() };
     }
-  });
-});
-
-// ============================================================================
-// BACKEND FUNCTIONS
-// ============================================================================
-
-async function checkUserExists(email, password) {
-  try {
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Users!A2:G'
-    });
-
-    const rows = result.data.values || [];
-    const normalizedEmail = email.toLowerCase().trim();
-
-    for (let row of rows) {
-      const rowEmail = String(row[0]).toLowerCase().trim();
-      const rowPassword = String(row[4]).trim();
-      
-      if (rowEmail === normalizedEmail && rowPassword === password) {
-        return {
-          email: row[0],
-          name: row[1],
-          locations: row[2],
-          role: row[3],
-          astQuals: row[6] || 'Emergency'
-        };
-      }
-    }
-
-    return { error: 'Invalid email or password' };
-  } catch (err) {
-    console.error('checkUserExists error:', err);
-    return { error: err.toString() };
-  }
 }
 
-async function getOfficerLocations(email) {
-  try {
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Rostering Officers!A2:C'
-    });
-
-    const rows = result.data.values || [];
-    const locations = [];
-    const normalizedEmail = String(email).toLowerCase().trim();
-
-    for (let row of rows) {
-      const rowEmail = String(row[2]).toLowerCase().trim();
-      if (rowEmail === normalizedEmail) {
-        const location = String(row[0]).trim();
-        if (location && !locations.includes(location)) {
-          locations.push(location);
-        }
-      }
-    }
-
-    return locations;
-  } catch (err) {
-    console.error('getOfficerLocations error:', err);
-    return [];
-  }
-}
-
-async function getStaffLocations(email) {
-  try {
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Users!A2:C'
-    });
-
-    const rows = result.data.values || [];
-    const normalizedEmail = email.toLowerCase().trim();
-
-    for (let row of rows) {
-      if (row[0] && String(row[0]).toLowerCase().trim() === normalizedEmail) {
-        const locationsStr = row[2] || '';
-        return locationsStr.split(',').map(l => l.trim());
-      }
-    }
-
-    return [];
-  } catch (err) {
-    console.error('getStaffLocations error:', err);
-    return [];
-  }
-}
-
-async function getOfficerVacancies(email) {
-  try {
-    const locations = await getOfficerLocations(email);
+function loginWithEmail() {
+    const email = document.getElementById('emailInput').value.trim().toLowerCase();
+    const password = document.getElementById('passwordInput').value;
     
-    if (locations.length === 0) {
-      return [];
+    if (!email || !password) {
+        showMessage('Please enter both email and password', 'error');
+        return;
     }
 
-    const allVacancies = [];
-    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
-
-    for (let location of locations) {
-      if (!locationNames.includes(location)) continue;
-
-      const result = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: `Vacancies - ${location}!A2:D`
-      });
-
-      const rows = result.data.values || [];
-      for (let row of rows) {
-        if (row[0] && row[1]) {
-          allVacancies.push({
-            date: formatDate(row[0]),
-            jobType: row[1],
-            location: row[2]
-          });
+    callBackend('checkUserExists', {email, password}).then(user => {
+        if (user && user.error) {
+            showMessage(user.error, 'error');
+            return;
         }
-      }
-    }
-
-    return allVacancies;
-  } catch (err) {
-    console.error('getOfficerVacancies error:', err);
-    return [];
-  }
+        if (user) {
+            currentUser = { email: user.email, name: user.name };
+            userRole = user.role;
+            userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
+            showDashboard();
+        }
+    });
 }
 
-async function getStaffAvailableShifts(email) {
-  try {
-    const locations = await getStaffLocations(email);
+function showDashboard() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainDashboard').style.display = 'block';
+    document.getElementById('userNameDisplay').textContent = currentUser.name || currentUser.email;
     
-    if (locations.length === 0) {
-      console.log('No locations found for staff member:', email);
-      return [];
+    if (userRole === 'Officer') {
+        callBackend('getOfficerLocations', {email: currentUser.email}).then(locs => {
+            officerLocations = locs || [];
+            setupTabs();
+            setTimeout(() => loadMyVacancies(), 500);
+        });
+    } else {
+        setupTabs();
+        setTimeout(() => loadStaffShifts(), 500);
+    }
+}
+
+function setupTabs() {
+    const tabsContainer = document.getElementById('tabsContainer');
+    const tabsContent = document.getElementById('tabsContent');
+    
+    tabsContainer.innerHTML = '';
+    tabsContent.innerHTML = '';
+
+    if (userRole === 'Officer') {
+        tabsContainer.innerHTML = `
+            <button class="tab-button active" onclick="switchTab(0, this)">My Vacancies</button>
+            <button class="tab-button" onclick="switchTab(1, this)">Shift Cover Approvals</button>
+            <button class="tab-button" onclick="switchTab(2, this)">Pending Swaps</button>
+        `;
+        tabsContent.innerHTML = `
+            <div id="tab-0" class="tab-content active">
+                <h3>My Vacancies</h3>
+                <button class="btn-primary" onclick="addVacancyRow()">+ Add Shift</button>
+                <button class="btn-primary" onclick="saveVacancies()" style="margin-left: 10px;">Save Changes</button>
+                <div id="vacanciesContainer"></div>
+            </div>
+            <div id="tab-1" class="tab-content"><h3>Shift Cover Approvals</h3><div id="approvalsContainer"></div></div>
+            <div id="tab-2" class="tab-content"><h3>Pending Swaps</h3><div id="swapsContainer"></div></div>
+        `;
+    } else {
+        tabsContainer.innerHTML = `
+            <button class="tab-button active" onclick="switchTab(0, this)">Available Shifts</button>
+            <button class="tab-button" onclick="switchTab(1, this)">Shift Swaps</button>
+            <button class="tab-button" onclick="switchTab(2, this)">Settings</button>
+        `;
+        tabsContent.innerHTML = `
+            <div id="tab-0" class="tab-content active"><h3>Available Shifts</h3><button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button><div id="shiftsContainer"></div></div>
+            <div id="tab-1" class="tab-content">
+                <h3>Shift Swaps</h3>
+                <h4>Current Shifts Up for Swap (Approved)</h4>
+                <div id="currentSwapsContainer"></div>
+                <h4 style="margin-top: 30px;">List a New Shift for Swap</h4>
+                <div class="form-group"><label>Date</label><input type="date" id="swapDate" /></div>
+                <div class="form-group"><label>Location</label><select id="swapLocation" onchange="updateSwapJobTypes()"><option value="">Select Location</option></select></div>
+                <div class="form-group"><label>Job Type</label><select id="swapJobType"><option value="">Select Job Type</option></select></div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;"><input type="checkbox" id="swapIsServiceDisruption" /><label for="swapIsServiceDisruption" style="margin-bottom: 0;">Service-disruption shift</label></div>
+                <button class="btn-primary" onclick="openFortnightModal()">Select Available Days</button>
+            </div>
+            <div id="tab-2" class="tab-content">
+                <h3>Settings</h3>
+                <h4>Work Location Preferences</h4>
+                <div id="locationList"></div>
+                <button class="btn-primary" style="margin-top: 20px;" onclick="saveSettings()">Save Settings</button>
+            </div>
+        `;
+        populateSwapLocations();
+        loadLocationCheckboxes();
+    }
+}
+
+function switchTab(idx, btn) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + idx).classList.add('active');
+    btn.classList.add('active');
+    
+    if (userRole === 'Officer') {
+        if (idx === 0) loadMyVacancies();
+        if (idx === 1) loadOfficerApprovals();
+        if (idx === 2) loadPendingSwaps();
+    } else {
+        if (idx === 0) loadStaffShifts();
+        if (idx === 1) loadCurrentSwaps();
+    }
+}
+
+function loadMyVacancies() {
+    showMessage('Loading vacancies...', 'info');
+    callBackend('getOfficerVacancies', {email: currentUser.email}).then(vacancies => {
+        renderVacancies(vacancies || []);
+    });
+}
+
+function renderVacancies(vacancies) {
+    const container = document.getElementById('vacanciesContainer');
+    
+    if (!vacancies || vacancies.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No vacancies yet</p>';
+        return;
     }
 
-    console.log('Staff locations:', locations);
+    let html = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr>';
+    
+    vacancies.forEach((vac) => {
+        let dateString = '';
+        if (vac.date && vac.date.includes('/')) {
+            const parts = vac.date.split('/');
+            if (parts.length === 3) {
+                dateString = parts[2] + '-' + String(parts[1]).padStart(2, '0') + '-' + String(parts[0]).padStart(2, '0');
+            }
+        }
+        
+        html += `<tr>
+            <td><input type="date" class="vac-date" value="${dateString}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
+            <td style="padding: 12px;">${vac.location}</td>
+            <td><input type="text" value="${vac.jobType}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
+            <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
+        </tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+}
 
-    const allShifts = [];
-    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
+function addVacancyRow() {
+    const container = document.getElementById('vacanciesContainer');
+    let table = container.querySelector('table');
+    
+    if (!table) {
+        container.innerHTML = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr></table>';
+        table = container.querySelector('table');
+    }
+    
+    const newRow = table.insertRow();
+    
+    let locHtml = '<select class="vac-location" onchange="updateNewRowJobTypes(this)" style="width: 100%; padding: 6px;"><option value="">Select Location</option>';
+    officerLocations.forEach(loc => {
+        locHtml += `<option value="${loc}">${loc}</option>`;
+    });
+    locHtml += '</select>';
+    
+    newRow.innerHTML = `<td><input type="date" class="vac-date" style="width: 100%; padding: 6px; border: 1px solid #ddd;"></td>
+    <td>${locHtml}</td>
+    <td><select class="vac-jobtype" style="width: 100%; padding: 6px;"><option value="">Select Job Type</option></select></td>
+    <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>`;
+}
 
-    for (let location of locations) {
-      if (!locationNames.includes(location)) {
-        console.log('Skipping invalid location:', location);
-        continue;
-      }
+function updateNewRowJobTypes(select) {
+    const location = select.value;
+    const row = select.closest('tr');
+    const jobTypeSelect = row.querySelector('.vac-jobtype');
+    const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
+    
+    jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+    jobTypes.forEach(jt => {
+        const opt = document.createElement('option');
+        opt.value = jt;
+        opt.textContent = jt;
+        jobTypeSelect.appendChild(opt);
+    });
+}
 
-      try {
-        const result = await sheets.spreadsheets.values.get({
-          spreadsheetId: SHEET_ID,
-          range: `Vacancies - ${location}!A2:D`
+function removeVacancyRow(btn) {
+    btn.parentElement.parentElement.remove();
+}
+
+function saveVacancies() {
+    const rows = document.querySelectorAll('#vacanciesContainer table tr');
+    const vacancies = [];
+    
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const dateInput = row.querySelector('.vac-date');
+        const jobtypeSelect = row.querySelector('.vac-jobtype');
+        const locationSelect = row.querySelector('.vac-location');
+        
+        if (dateInput && jobtypeSelect && locationSelect && !dateInput.disabled) {
+            let date = dateInput.value;
+            const jobType = jobtypeSelect.value;
+            const location = locationSelect.value;
+            
+            if (date && date.includes('-')) {
+                const [year, month, day] = date.split('-');
+                date = day + '/' + month + '/' + year;
+            }
+            
+            if (date && jobType && location) {
+                vacancies.push({ date, jobType, location });
+            }
+        }
+    }
+
+    if (vacancies.length === 0) {
+        showMessage('No valid new vacancies to save', 'error');
+        return;
+    }
+
+    showMessage('Saving vacancies...', 'info');
+
+    callBackend('saveOfficerVacancies', {
+        email: currentUser.email,
+        vacancies: vacancies
+    }).then(result => {
+        if (result.error) {
+            showMessage(result.error, 'error');
+        } else {
+            showMessage('✓ Vacancies saved', 'success');
+            loadMyVacancies();
+        }
+    });
+}
+
+function loadOfficerApprovals() {
+    showMessage('Loading approvals...', 'info');
+    Promise.all([
+        callBackend('getOfficerPendingApprovals', {email: currentUser.email}),
+        callBackend('getOfficerPastApprovals', {email: currentUser.email})
+    ]).then(([pending, past]) => {
+        renderApprovals(pending || [], past || []);
+    });
+}
+
+function renderApprovals(pending, past) {
+    const container = document.getElementById('approvalsContainer');
+    
+    let html = '';
+
+    // Outstanding Cover Requests
+    if (pending.length === 0) {
+        html += '<h4>Outstanding Cover Requests</h4><p style="color: #999;">No outstanding requests</p>';
+    } else {
+        html += '<h4>Outstanding Cover Requests</h4>';
+        const grouped = {};
+        pending.forEach(claim => {
+            const key = claim.date + '|' + claim.jobType + '|' + claim.location;
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(claim);
         });
 
-        const rows = result.data.values || [];
-        console.log(`Found ${rows.length} shifts in ${location}`);
-
-        for (let row of rows) {
-          if (row[0] && row[1]) {
-            allShifts.push({
-              date: formatDate(row[0]),
-              jobType: row[1],
-              location: row[2]
+        for (let key in grouped) {
+            const claimList = grouped[key];
+            const first = claimList[0];
+            html += `<div class="shift-item">
+                <div class="shift-item-header">
+                    <strong>${first.date} - ${first.jobType} @ ${first.location}</strong>
+                </div>`;
+            
+            claimList.forEach((claim) => {
+                html += `<div class="applicant-row">
+                    <div class="applicant-info">
+                        <strong>${claim.claimingName}</strong><br>
+                        <span style="color: #666; font-size: 12px;">Submitted: ${claim.claimedTimestamp}</span>
+                    </div>
+                    <div class="applicant-buttons">
+                        <button class="btn-success" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>
+                        <button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>
+                    </div>
+                </div>`;
             });
-          }
+            html += '</div>';
         }
-      } catch (locErr) {
-        console.log(`Error reading ${location} vacancies:`, locErr.message);
-      }
     }
 
-    console.log('Total shifts found:', allShifts.length);
-    return allShifts;
-  } catch (err) {
-    console.error('getStaffAvailableShifts error:', err);
-    return [];
-  }
+    // Past Cover Requests
+    html += '<h4>Past Cover Requests</h4>';
+    if (past.length === 0) {
+        html += '<p style="color: #999;">No resolved requests</p>';
+    } else {
+        html += '<table>';
+        html += '<tr><th>Shift Date</th><th>Location</th><th>Job Type</th><th>Date Resolved</th><th>Shift Approved For</th><th>Shift Denied For</th></tr>';
+        
+        past.forEach(item => {
+            const approvedLink = item.approved ? `<a href="mailto:${item.approved.email}">${item.approved.name}</a>` : '-';
+            const deniedLinks = item.denied.length > 0 ? item.denied.map(d => `<a href="mailto:${d.email}">${d.name}</a>`).join(', ') : '-';
+            
+            html += `<tr>
+                <td>${item.date}</td>
+                <td>${item.location}</td>
+                <td>${item.jobType}</td>
+                <td>${item.resolvedDate}</td>
+                <td>${approvedLink}</td>
+                <td>${deniedLinks}</td>
+            </tr>`;
+        });
+        html += '</table>';
+    }
+
+    container.innerHTML = html;
 }
 
-async function requestShifts(officerEmail, officerName, shifts) {
-  try {
-    const timestamp = new Date().toLocaleString();
-    
-    console.log(`Shift request from ${officerName} (${officerEmail}) for ${shifts.length} shifts`);
-    
-    const officerResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Rostering Officers!A2:C'
+function approveSwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
+    showMessage('Approving swap...', 'info');
+    callBackend('approveSwap', {
+        claimingEmail, claimingName, originalEmail, originalName,
+        officerEmail: currentUser.email,
+        officerName: currentUser.name,
+        date, jobType, location
+    }).then(result => {
+        if (result.error) showMessage(result.error, 'error');
+        else { showMessage('✓ Approved and auto-denied other applicants', 'success'); loadOfficerApprovals(); }
     });
+}
 
-    const officerRows = officerResult.data.values || [];
-    const officersByLocation = {};
+function denySwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
+    showMessage('Denying swap...', 'info');
+    callBackend('denySwap', {
+        claimingEmail, claimingName, originalEmail, originalName,
+        officerEmail: currentUser.email,
+        officerName: currentUser.name,
+        date, jobType, location
+    }).then(result => {
+        if (result.error) showMessage(result.error, 'error');
+        else { showMessage('✓ Denied', 'success'); loadOfficerApprovals(); }
+    });
+}
 
-    for (let row of officerRows) {
-      const location = String(row[0]).trim();
-      const rostName = String(row[1]).trim();
-      const rostEmail = String(row[2]).trim();
-      
-      if (!officersByLocation[location]) {
-        officersByLocation[location] = [];
-      }
-      officersByLocation[location].push({ name: rostName, email: rostEmail });
+function loadPendingSwaps() {
+    showMessage('Loading pending swaps...', 'info');
+    callBackend('getOfficerMarketplaceListings', {email: currentUser.email}).then(listings => {
+        renderPendingSwaps(listings || []);
+    });
+}
+
+function renderPendingSwaps(listings) {
+    const container = document.getElementById('swapsContainer');
+    
+    if (!listings || listings.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No pending swaps</p>';
+        return;
     }
 
-    const requestsToAdd = [];
-    for (let shift of shifts) {
-      requestsToAdd.push([
-        timestamp,
-        officerEmail,
-        officerName,
-        shift.date,
-        shift.jobType,
-        shift.location,
-        'Pending',
-        '',
-        ''
-      ]);
-    }
+    let html = '';
+    listings.forEach(listing => {
+        const color = listing.isServiceDisruption ? '#ffe6e6' : '#f9f9f9';
+        const borderColor = listing.isServiceDisruption ? '#dc3545' : '#000';
+        html += `<div style="background: ${color}; border-left: 4px solid ${borderColor}; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <strong>${listing.date} - ${listing.jobType} @ ${listing.location}</strong>
+                ${listing.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold;">SERVICE-DISRUPTION</span>' : ''}
+            </div>
+            <div style="color: #666; font-size: 13px; margin-bottom: 10px;">Offered by: ${listing.originalName}</div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approvePendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Approve to Marketplace</button>
+                <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openDenySwapModal('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Deny</button>
+            </div>
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+}
 
-    if (requestsToAdd.length > 0) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID,
-        range: 'Requests!A2:I',
-        valueInputOption: 'RAW',
-        resource: { values: requestsToAdd }
-      });
-      console.log(`Logged ${requestsToAdd.length} requests to Requests sheet`);
-    }
-
-    const shiftsByLocation = {};
-    for (let shift of shifts) {
-      if (!shiftsByLocation[shift.location]) {
-        shiftsByLocation[shift.location] = [];
-      }
-      shiftsByLocation[shift.location].push(shift);
-    }
-
-    for (let location in shiftsByLocation) {
-      const locationShifts = shiftsByLocation[location];
-      const officers = officersByLocation[location] || [];
-      
-      const shiftList = locationShifts
-        .map(s => `${s.date} - ${s.jobType} @ ${location}`)
-        .join('<br>');
-
-      for (let officer of officers) {
-        try {
-          const approveSubject = `Your application to cover shifts has been approved`;
-          const approveBody = `Dear ${officerName},\n\nYou have been approved for the shift(s):\n${locationShifts.map(s => `${s.date} - ${s.jobType} @ ${s.location}`).join('\n')}\n\nThanks for helping out!\n\nSincerely\n${officer.name}`;
-          const approveMail = `mailto:${officerEmail}?subject=${encodeURIComponent(approveSubject)}&body=${encodeURIComponent(approveBody)}`;
-
-          const denySubject = `Your shift request could not be approved`;
-          const denyBody = `Dear ${officerName},\n\nUnfortunately, we are unable to approve your request for the following shift(s) at this time:\n${locationShifts.map(s => `${s.date} - ${s.jobType} @ ${s.location}`).join('\n')}\n\nPlease contact ${officer.name}: mailto:${officer.email}`;
-          const denyMail = `mailto:${officerEmail}?subject=${encodeURIComponent(denySubject)}&body=${encodeURIComponent(denyBody)}`;
-
-          const htmlBody = `<p>Dear ${officer.name},</p>
-<p>${officerName} is requesting to cover the following shifts:</p>
-<p><strong>${shiftList}</strong></p>
-<p><a href="${approveMail}">To approve and reply to ${officerName}</a></p>
-<p><a href="${denyMail}">To deny and reply to ${officerName}</a></p>
-<p>Thank you,<br>Rural Rosters Support</p>`;
-
-          await transporter.sendMail({
-            from: GMAIL_USER,
-            to: officer.email,
-            cc: 'ruralroster@gmail.com',
-            subject: `[Rural Rosters] ${officerName} is requesting a shift`,
-            html: htmlBody
-          });
-          console.log(`Email sent to ${officer.email}`);
-        } catch (err) {
-          console.error(`Failed to email ${officer.email}:`, err);
+function approvePendingSwap(email, name, date, jobType, location) {
+    showMessage('Approving pending swap for marketplace...', 'info');
+    callBackend('approvePendingSwap', {
+        staffEmail: email,
+        staffName: name,
+        date, jobType, location
+    }).then(result => {
+        if (result.error) showMessage(result.error, 'error');
+        else { 
+            showMessage('✓ Swap approved and moved to marketplace', 'success'); 
+            loadPendingSwaps();
         }
-      }
-    }
-
-    return { success: true, message: 'Request submitted and emails sent' };
-  } catch (err) {
-    console.error('requestShifts error:', err);
-    return { error: err.toString() };
-  }
+    });
 }
 
-async function listShiftForSwap(email, name, date, jobType, location, isServiceDisruption, availableDays) {
-  try {
-    const timestamp = new Date().toLocaleString();
-    
-    console.log(`${name} listing shift for swap: ${date} ${jobType} @ ${location}`);
-
-    const row = [
-      email,
-      name,
-      date,
-      jobType,
-      location,
-      'Pending Verification',
-      isServiceDisruption ? 'Y' : 'N',
-      availableDays || ''
-    ];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H',
-      valueInputOption: 'RAW',
-      resource: { values: [row] }
-    });
-
-    return { success: true, message: 'Shift listed for swap (pending officer approval)' };
-  } catch (err) {
-    console.error('listShiftForSwap error:', err);
-    return { error: err.toString() };
-  }
+function openDenySwapModal(email, name, date, jobType, location) {
+    pendingDenySwap = { email, name, date, jobType, location };
+    document.getElementById('denySwapModal').classList.add('active');
+    document.getElementById('denyReason').value = '';
 }
 
-async function getMarketplaceListings(email) {
-  try {
-    const locations = await getStaffLocations(email);
-    
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H'
-    });
-
-    const rows = result.data.values || [];
-    const listings = [];
-
-    for (let row of rows) {
-      const location = String(row[4]).trim();
-      const status = String(row[5]).trim();
-      
-      if (locations.includes(location) && status === 'Available') {
-        listings.push({
-          originalEmail: row[0],
-          originalName: row[1],
-          date: row[2],
-          jobType: row[3],
-          location: row[4],
-          isServiceDisruption: row[6] === 'Y',
-          availableDays: row[7] || ''
-        });
-      }
-    }
-
-    return listings;
-  } catch (err) {
-    console.error('getMarketplaceListings error:', err);
-    return [];
-  }
+function closeDenyModal() {
+    document.getElementById('denySwapModal').classList.remove('active');
+    pendingDenySwap = null;
 }
 
-async function claimShift(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
-  try {
-    const timestamp = new Date().toLocaleString();
+function submitDenySwap() {
+    if (!pendingDenySwap) return;
     
-    console.log(`${claimingName} claiming shift from ${originalName}: ${date} ${jobType} @ ${location}`);
-
-    const claimRow = [
-      claimingEmail,
-      claimingName,
-      originalEmail,
-      originalName,
-      date,
-      jobType,
-      location,
-      timestamp,
-      'Pending'
-    ];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:I',
-      valueInputOption: 'RAW',
-      resource: { values: [claimRow] }
-    });
-
-    const listingResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H'
-    });
-
-    const listingRows = listingResult.data.values || [];
-    for (let i = 0; i < listingRows.length; i++) {
-      if (listingRows[i][0] === originalEmail && 
-          listingRows[i][2] === date && 
-          listingRows[i][3] === jobType && 
-          listingRows[i][4] === location) {
-        
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Marketplace Listings!F${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Claimed']] }
-        });
-        break;
-      }
+    const reason = document.getElementById('denyReason').value.trim();
+    if (!reason) {
+        showMessage('Please provide a reason', 'error');
+        return;
     }
 
-    const officerResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Rostering Officers!A2:C'
-    });
-
-    const officerRows = officerResult.data.values || [];
-    for (let row of officerRows) {
-      if (String(row[0]).trim() === location) {
-        const officerEmail = String(row[2]).trim();
-        const officerName = String(row[1]).trim();
-
-        const htmlBody = `<p>Dear ${officerName},</p>
-<p><strong>${claimingName}</strong> has claimed a shift from <strong>${originalName}</strong>:</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>
-<p>Please review and approve or deny this swap request.</p>
-<p>Thank you,<br>Rural Rosters Support</p>`;
-
-        await transporter.sendMail({
-          from: GMAIL_USER,
-          to: officerEmail,
-          cc: 'ruralroster@gmail.com',
-          subject: `[Rural Rosters] Shift Swap Claim - ${claimingName} claiming from ${originalName}`,
-          html: htmlBody
-        });
-
-        console.log(`Claim notification sent to ${officerEmail}`);
-        break;
-      }
-    }
-
-    return { success: true, message: 'Shift claimed successfully' };
-  } catch (err) {
-    console.error('claimShift error:', err);
-    return { error: err.toString() };
-  }
-}
-
-async function getOfficerMarketplaceListings(email) {
-  try {
-    const locations = await getOfficerLocations(email);
-    
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H'
-    });
-
-    const rows = result.data.values || [];
-    const listings = [];
-
-    for (let row of rows) {
-      const location = String(row[4]).trim();
-      const status = String(row[5]).trim();
-      
-      if (locations.includes(location) && status === 'Pending Verification') {
-        listings.push({
-          originalEmail: row[0],
-          originalName: row[1],
-          date: row[2],
-          jobType: row[3],
-          location: row[4],
-          isServiceDisruption: row[6] === 'Y',
-          availableDays: row[7] || '',
-          color: row[6] === 'Y' ? 'red' : 'black'
-        });
-      }
-    }
-
-    return listings;
-  } catch (err) {
-    console.error('getOfficerMarketplaceListings error:', err);
-    return [];
-  }
-}
-
-async function getOfficerPendingApprovals(email) {
-  try {
-    const locations = await getOfficerLocations(email);
-    
-    const claims = [];
-
-    // Get swap claims - ONLY PENDING
-    const claimsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:J'
-    });
-
-    const claimsRows = claimsResponse.data.values || [];
-    for (let i = 0; i < claimsRows.length; i++) {
-      if (claimsRows[i][4] && locations.includes(claimsRows[i][6]) && claimsRows[i][8] && claimsRows[i][8].toUpperCase() === 'PENDING') {
-        claims.push({
-          type: 'swap_claim',
-          claimingEmail: claimsRows[i][0],
-          claimingName: claimsRows[i][1],
-          originalEmail: claimsRows[i][2],
-          originalName: claimsRows[i][3],
-          date: claimsRows[i][4],
-          jobType: claimsRows[i][5],
-          location: claimsRows[i][6],
-          claimedTimestamp: claimsRows[i][7]
-        });
-      }
-    }
-
-    // Get shift requests - ONLY PENDING
-    const requestsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Requests!A2:I'
-    });
-
-    const requestsRows = requestsResponse.data.values || [];
-    for (let i = 0; i < requestsRows.length; i++) {
-      if (requestsRows[i][5] && locations.includes(requestsRows[i][5]) && requestsRows[i][6] && requestsRows[i][6].toUpperCase() === 'PENDING') {
-        claims.push({
-          type: 'shift_request',
-          claimingEmail: requestsRows[i][1],
-          claimingName: requestsRows[i][2],
-          date: requestsRows[i][3],
-          jobType: requestsRows[i][4],
-          location: requestsRows[i][5],
-          claimedTimestamp: requestsRows[i][0]
-        });
-      }
-    }
-
-    return claims;
-  } catch (err) {
-    console.error('getOfficerPendingApprovals error:', err);
-    return [];
-  }
-}
-
-async function approveSwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location) {
-  try {
-    console.log(`Approving swap: ${claimingName} claims ${originalName}'s shift`);
-    
-    const resolvedTimestamp = new Date().toLocaleString();
-
-    const claimsResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:J'
-    });
-
-    const claimRows = claimsResult.data.values || [];
-    const otherApplicants = [];
-    
-    // Find the approved applicant and all other pending applicants for this shift
-    for (let i = 0; i < claimRows.length; i++) {
-      const claimDate = String(claimRows[i][4]).trim();
-      const claimJobType = String(claimRows[i][5]).trim();
-      const claimLocation = String(claimRows[i][6]).trim();
-      const claimStatus = String(claimRows[i][8]).trim();
-      
-      if (claimDate === date && claimJobType === jobType && claimLocation === location) {
-        if (claimRows[i][0] === claimingEmail && claimRows[i][2] === originalEmail) {
-          // This is the approved applicant
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `Marketplace Claims!I${i + 2}:J${i + 2}`,
-            valueInputOption: 'RAW',
-            resource: { values: [['Approved', resolvedTimestamp]] }
-          });
-        } else if (claimStatus === 'Pending') {
-          // This is another pending applicant for the same shift - auto-deny them
-          otherApplicants.push({
-            email: claimRows[i][0],
-            name: claimRows[i][1],
-            rowIndex: i
-          });
-          
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `Marketplace Claims!I${i + 2}:J${i + 2}`,
-            valueInputOption: 'RAW',
-            resource: { values: [['Denied', resolvedTimestamp]] }
-          });
+    showMessage('Denying swap...', 'info');
+    callBackend('denySwapWithReason', {
+        staffEmail: pendingDenySwap.email,
+        staffName: pendingDenySwap.name,
+        date: pendingDenySwap.date,
+        jobType: pendingDenySwap.jobType,
+        location: pendingDenySwap.location,
+        reason: reason
+    }).then(result => {
+        if (result.error) showMessage(result.error, 'error');
+        else {
+            showMessage('✓ Swap denied and email sent', 'success');
+            closeDenyModal();
+            loadPendingSwaps();
         }
-      }
-    }
-
-    const listingResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H'
     });
-
-    const listingRows = listingResult.data.values || [];
-    for (let i = 0; i < listingRows.length; i++) {
-      if (listingRows[i][0] === originalEmail && 
-          listingRows[i][2] === date && 
-          listingRows[i][3] === jobType) {
-        
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Marketplace Listings!F${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Approved']] }
-        });
-        break;
-      }
-    }
-
-    // Send approval email to approved applicant
-    const approveMail = `<p>Dear ${claimingName},</p>
-<p>Your request to cover the shift has been <strong>APPROVED</strong>:</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>
-<p>Original staff member: ${originalName}</p>
-<p>Please coordinate with ${originalName} to confirm the handover.</p>`;
-
-    await transporter.sendMail({
-      from: GMAIL_USER,
-      to: claimingEmail,
-      subject: `[Rural Rosters] Shift Swap Approved`,
-      html: approveMail
-    });
-
-    // Send notification to original staff member
-    const originalMail = `<p>Dear ${originalName},</p>
-<p>Your shift swap request has been <strong>APPROVED</strong>:</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>
-<p>Staff member taking your shift: ${claimingName}</p>`;
-
-    await transporter.sendMail({
-      from: GMAIL_USER,
-      to: originalEmail,
-      subject: `[Rural Rosters] Your Shift Swap Approved`,
-      html: originalMail
-    });
-
-    // Send denial emails to all other applicants
-    for (let applicant of otherApplicants) {
-      const denyMail = `<p>Dear ${applicant.name},</p>
-<p>Unfortunately, another applicant was approved for the following shift:</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>
-<p>Please try again for future shifts.</p>`;
-
-      await transporter.sendMail({
-        from: GMAIL_USER,
-        to: applicant.email,
-        subject: `[Rural Rosters] Shift Swap - Another Applicant Approved`,
-        html: denyMail
-      });
-    }
-
-    return { success: true, message: 'Swap approved and emails sent' };
-  } catch (err) {
-    console.error('approveSwap error:', err);
-    return { error: err.toString() };
-  }
 }
 
-async function denySwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location) {
-  try {
-    console.log(`Denying swap: ${claimingName} claim rejected`);
+function loadStaffShifts() {
+    showMessage('Loading shifts...', 'info');
+    callBackend('getStaffAvailableShifts', {email: currentUser.email}).then(shifts => {
+        renderAllShifts(shifts || []);
+    });
+}
+
+function renderAllShifts(shifts) {
+    const container = document.getElementById('shiftsContainer');
+    if (!shifts || shifts.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No shifts available</p>';
+        return;
+    }
+
+    let html = '';
+    shifts.forEach((shift, idx) => {
+        html += `<div class="shift-item">
+            <div class="shift-item-header">
+                <input type="checkbox" class="shift-checkbox" value="${idx}" style="margin-right: 10px;">
+                <label style="margin-bottom: 0; flex: 1;"><strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong></label>
+            </div>
+        </div>`;
+    });
     
-    const resolvedTimestamp = new Date().toLocaleString();
-
-    const claimsResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:J'
-    });
-
-    const claimRows = claimsResult.data.values || [];
-    for (let i = 0; i < claimRows.length; i++) {
-      if (claimRows[i][0] === claimingEmail && 
-          claimRows[i][2] === originalEmail && 
-          claimRows[i][4] === date) {
-        
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Marketplace Claims!I${i + 2}:J${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Denied', resolvedTimestamp]] }
-        });
-        break;
-      }
-    }
-
-    const denyMail = `<p>Dear ${claimingName},</p>
-<p>Unfortunately, your request to cover the shift has been <strong>DENIED</strong>:</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>`;
-
-    await transporter.sendMail({
-      from: GMAIL_USER,
-      to: claimingEmail,
-      subject: `[Rural Rosters] Shift Swap Not Approved`,
-      html: denyMail
-    });
-
-    return { success: true, message: 'Swap denied and email sent' };
-  } catch (err) {
-    console.error('denySwap error:', err);
-    return { error: err.toString() };
-  }
+    container.innerHTML = html;
 }
 
-async function saveOfficerVacancies(email, vacancies) {
-  try {
-    const locations = await getOfficerLocations(email);
-    
-    if (locations.length === 0) {
-      return { error: 'No locations found for officer' };
+function requestShifts() {
+    const checkboxes = document.querySelectorAll('.shift-checkbox:checked');
+    if (checkboxes.length === 0) {
+        showMessage('Please select at least one shift', 'error');
+        return;
     }
 
-    console.log(`Saving ${vacancies.length} vacancies for officer ${email}`);
-
-    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
-    
-    const vacanciesByLocation = {};
-    for (let vac of vacancies) {
-      const loc = vac.location;
-      if (!vacanciesByLocation[loc]) {
-        vacanciesByLocation[loc] = [];
-      }
-      vacanciesByLocation[loc].push(vac);
-    }
-
-    for (let location in vacanciesByLocation) {
-      const sheetName = `Vacancies - ${location}`;
-      const rows = vacanciesByLocation[location].map(vac => [vac.date, vac.jobType, location, '']);
-
-      if (rows.length > 0) {
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID,
-          range: `${sheetName}!A2:D`,
-          valueInputOption: 'RAW',
-          resource: { values: rows }
-        });
-      }
-    }
-
-    return { success: true, message: `Saved ${vacancies.length} vacancies` };
-  } catch (err) {
-    console.error('saveOfficerVacancies error:', err);
-    return { error: err.toString() };
-  }
-}
-
-async function approvePendingSwap(staffEmail, staffName, date, jobType, location) {
-  try {
-    const listingsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H'
-    });
-    const listingsRows = listingsResponse.data.values || [];
-    let availableDays = '';
-
-    for (let i = 0; i < listingsRows.length; i++) {
-      if (listingsRows[i][0] === staffEmail && listingsRows[i][2] === date && listingsRows[i][3] === jobType && listingsRows[i][4] === location) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Marketplace Listings!F${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Available']] }
-        });
-        availableDays = listingsRows[i][7] || '';
-        break;
-      }
-    }
-
-    const htmlBody = `<p>Dear ${staffName},</p>
-<p>Your swap request has been approved!</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>
-<p>Available days/shifts: ${availableDays}</p>`;
-
-    await transporter.sendMail({
-      from: GMAIL_USER,
-      to: staffEmail,
-      subject: `[Rural Rosters] Your Swap Approved`,
-      html: htmlBody
-    });
-
-    return { success: true, message: 'Swap approved and moved to marketplace' };
-  } catch (err) {
-    console.error('approvePendingSwap error:', err);
-    return { error: err.toString() };
-  }
-}
-
-async function denySwapWithReason(staffEmail, staffName, date, jobType, location, reason) {
-  try {
-    const listingsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Listings!A2:H'
-    });
-    const listingsRows = listingsResponse.data.values || [];
-
-    for (let i = 0; i < listingsRows.length; i++) {
-      if (listingsRows[i][0] === staffEmail && listingsRows[i][2] === date && listingsRows[i][3] === jobType && listingsRows[i][4] === location) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Marketplace Listings!F${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Denied']] }
-        });
-        break;
-      }
-    }
-
-    const htmlBody = `<p>Dear ${staffName},</p>
-<p>Your shift swap request has been <strong>DENIED</strong>.</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>
-<p><strong>Reason:</strong> ${reason}</p>`;
-
-    await transporter.sendMail({
-      from: GMAIL_USER,
-      to: staffEmail,
-      cc: 'ruralroster@gmail.com',
-      subject: `[Rural Rosters] Your Swap Request Denied`,
-      html: htmlBody
-    });
-
-    return { success: true, message: 'Swap denied and email sent' };
-  } catch (err) {
-    console.error('denySwapWithReason error:', err);
-    return { error: err.toString() };
-  }
-}
-
-async function approveShiftRequest(email, name, date, jobType, location) {
-  try {
-    const requestsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Requests!A2:G'
-    });
-    const requestsRows = requestsResponse.data.values || [];
-
-    for (let i = 1; i < requestsRows.length; i++) {
-      if (requestsRows[i][1] === email && requestsRows[i][3] === date && requestsRows[i][4] === jobType && requestsRows[i][5] === location && requestsRows[i][6] === 'Pending') {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Requests!G${i + 1}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Approved']] }
-        });
-        break;
-      }
-    }
-
-    const htmlBody = `<p>Dear ${name},</p>
-<p>Your shift request has been <strong>APPROVED</strong>!</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>`;
-
-    await transporter.sendMail({
-      from: GMAIL_USER,
-      to: email,
-      subject: `[Rural Rosters] Your Shift Request Approved`,
-      html: htmlBody
-    });
-
-    return { success: true };
-  } catch (err) {
-    console.error('approveShiftRequest error:', err);
-    return { error: err.toString() };
-  }
-}
-
-async function denyShiftRequest(email, name, date, jobType, location) {
-  try {
-    const requestsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Requests!A2:G'
-    });
-    const requestsRows = requestsResponse.data.values || [];
-
-    for (let i = 1; i < requestsRows.length; i++) {
-      if (requestsRows[i][1] === email && requestsRows[i][3] === date && requestsRows[i][4] === jobType && requestsRows[i][5] === location && requestsRows[i][6] === 'Pending') {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Requests!G${i + 1}`,
-          valueInputOption: 'RAW',
-          resource: { values: [['Denied']] }
-        });
-        break;
-      }
-    }
-
-    const htmlBody = `<p>Dear ${name},</p>
-<p>Your shift request has been <strong>DENIED</strong>.</p>
-<p><strong>${date} - ${jobType} @ ${location}</strong></p>`;
-
-    await transporter.sendMail({
-      from: GMAIL_USER,
-      to: email,
-      subject: `[Rural Rosters] Your Shift Request Denied`,
-      html: htmlBody
-    });
-
-    return { success: true };
-  } catch (err) {
-    console.error('denyShiftRequest error:', err);
-    return { error: err.toString() };
-  }
-}
-
-function formatDate(dateVal) {
-  if (!dateVal) return '';
-  
-  if (dateVal instanceof Date) {
-    const d = dateVal.getDate();
-    const m = dateVal.getMonth() + 1;
-    const y = dateVal.getFullYear();
-    return (d < 10 ? '0' + d : d) + '/' + (m < 10 ? '0' + m : m) + '/' + y;
-  }
-  
-  return String(dateVal);
-}
-
-async function getOfficerPastApprovals(email) {
-  try {
-    const locations = await getOfficerLocations(email);
-    
-    const pastApprovals = {};
-
-    // Get resolved swap claims (Approved or Denied)
-    const claimsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:J'
-    });
-
-    const claimsRows = claimsResponse.data.values || [];
-    for (let i = 0; i < claimsRows.length; i++) {
-      const status = String(claimsRows[i][8]).trim().toUpperCase();
-      if (claimsRows[i][4] && locations.includes(claimsRows[i][6]) && (status === 'APPROVED' || status === 'DENIED')) {
-        const shiftKey = claimsRows[i][4] + '|' + claimsRows[i][5] + '|' + claimsRows[i][6];
-        
-        if (!pastApprovals[shiftKey]) {
-          pastApprovals[shiftKey] = {
-            date: claimsRows[i][4],
-            jobType: claimsRows[i][5],
-            location: claimsRows[i][6],
-            approved: null,
-            denied: [],
-            resolvedDate: null
-          };
+    showMessage('Sending shift requests...', 'info');
+    callBackend('requestShifts', {
+        email: currentUser.email,
+        name: currentUser.name,
+        shifts: Array.from(checkboxes).map(cb => {
+            const item = cb.parentElement.parentElement;
+            const text = item.querySelector('label strong').textContent;
+            const [date, jobAndLocation] = text.split(' - ');
+            const [jobType, location] = jobAndLocation.split(' @ ');
+            return { date: date.trim(), jobType: jobType.trim(), location: location.trim() };
+        })
+    }).then(result => {
+        if (result.error) showMessage(result.error, 'error');
+        else {
+            showMessage('✓ Shift requests sent!', 'success');
+            Array.from(checkboxes).forEach(cb => cb.checked = false);
         }
-        
-        if (status === 'APPROVED') {
-          pastApprovals[shiftKey].approved = {
-            email: claimsRows[i][0],
-            name: claimsRows[i][1]
-          };
-          pastApprovals[shiftKey].resolvedDate = claimsRows[i][9] || claimsRows[i][7];
+    });
+}
+
+function loadCurrentSwaps() {
+    callBackend('getMarketplaceListings', {email: currentUser.email}).then(swaps => {
+        const container = document.getElementById('currentSwapsContainer');
+        if (!swaps || swaps.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No approved swaps available (awaiting officer approval of your swap offers)</p>';
         } else {
-          pastApprovals[shiftKey].denied.push({
-            email: claimsRows[i][0],
-            name: claimsRows[i][1]
-          });
-          pastApprovals[shiftKey].resolvedDate = claimsRows[i][9] || claimsRows[i][7];
+            let html = '';
+            swaps.forEach(s => {
+                const availableDaysText = s.availableDays ? `<div style="color: #666; font-size: 12px; margin-top: 5px;"><strong>Can work:</strong> ${s.availableDays}</div>` : '';
+                html += `<div class="shift-item">
+                    <div><strong>${s.date} - ${s.jobType} @ ${s.location}</strong></div>
+                    <div style="color: #666; font-size: 13px;">Offered by: ${s.originalName}</div>
+                    ${availableDaysText}
+                </div>`;
+            });
+            container.innerHTML = html;
         }
-      }
-    }
-
-    // Get resolved shift requests (Approved or Denied)
-    const requestsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Requests!A2:I'
     });
-
-    const requestsRows = requestsResponse.data.values || [];
-    for (let i = 0; i < requestsRows.length; i++) {
-      const status = String(requestsRows[i][6]).trim().toUpperCase();
-      if (requestsRows[i][5] && locations.includes(requestsRows[i][5]) && (status === 'APPROVED' || status === 'DENIED')) {
-        const shiftKey = requestsRows[i][3] + '|' + requestsRows[i][4] + '|' + requestsRows[i][5];
-        
-        if (!pastApprovals[shiftKey]) {
-          pastApprovals[shiftKey] = {
-            date: requestsRows[i][3],
-            jobType: requestsRows[i][4],
-            location: requestsRows[i][5],
-            approved: null,
-            denied: [],
-            resolvedDate: null
-          };
-        }
-        
-        if (status === 'APPROVED') {
-          pastApprovals[shiftKey].approved = {
-            email: requestsRows[i][1],
-            name: requestsRows[i][2]
-          };
-          pastApprovals[shiftKey].resolvedDate = requestsRows[i][7] || requestsRows[i][0];
-        } else {
-          pastApprovals[shiftKey].denied.push({
-            email: requestsRows[i][1],
-            name: requestsRows[i][2]
-          });
-          pastApprovals[shiftKey].resolvedDate = requestsRows[i][7] || requestsRows[i][0];
-        }
-      }
-    }
-
-    // Convert to array and sort by shift date descending
-    const result = Object.values(pastApprovals);
-    result.sort((a, b) => {
-      const dateA = new Date(a.date.split('/').reverse().join('-'));
-      const dateB = new Date(b.date.split('/').reverse().join('-'));
-      return dateB - dateA;
-    });
-
-    return result;
-  } catch (err) {
-    console.error('getOfficerPastApprovals error:', err);
-    return [];
-  }
 }
 
-// Start server
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  console.log(`Rural Rosters Backend listening on port ${PORT}`);
-});
+function populateSwapLocations() {
+    const select = document.getElementById('swapLocation');
+    select.innerHTML = '<option value="">Select Location</option>';
+    userLocations.forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc;
+        opt.textContent = loc;
+        select.appendChild(opt);
+    });
+}
+
+function updateSwapJobTypes() {
+    const location = document.getElementById('swapLocation').value;
+    const jobTypeSelect = document.getElementById('swapJobType');
+    const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
+    
+    jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+    jobTypes.forEach(jt => {
+        const opt = document.createElement('option');
+        opt.value = jt;
+        opt.textContent = jt;
+        jobTypeSelect.appendChild(opt);
+    });
+}
+
+function openFortnightModal() {
+    const date = document.getElementById('swapDate').value;
+    const location = document.getElementById('swapLocation').value;
+    const jobType = document.getElementById('swapJobType').value;
+
+    if (!date || !location || !jobType) {
+        showMessage('Please fill in Date, Location, and Job Type first', 'error');
+        return;
+    }
+
+    pendingFortnightSwap = { date, location, jobType };
+    renderFortnightGrid(date);
+    document.getElementById('fortnightModal').classList.add('active');
+}
+
+function renderFortnightGrid(dateStr) {
+    const container = document.getElementById('fortnightGrid');
+    
+    const [year, month, day] = dateStr.split('-');
+    const shiftDate = new Date(year, parseInt(month) - 1, parseInt(day));
+    
+    const fortnightStart = new Date(shiftDate);
+    const dayOfWeek = fortnightStart.getDay();
+    const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
+    fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
+
+    let html = '<div class="fortnight-grid">';
+    
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    for (let i = 0; i < 14; i++) {
+        const d = new Date(fortnightStart);
+        d.setDate(d.getDate() + i);
+        const dayName = dayNames[i % 7];
+        const dateNum = d.getDate();
+        html += `<div class="fortnight-day">${dayName}<br>${dateNum}</div>`;
+    }
+
+    html += '</div><div style="margin-top: 20px;"><h4>Day Shifts</h4><div class="fortnight-grid">';
+    for (let i = 0; i < 14; i++) {
+        html += `<div class="fortnight-checkbox"><input type="checkbox" class="fortnight-day-checkbox" value="${i}"><label style="margin-bottom: 0; font-size: 11px;">Day</label></div>`;
+    }
+    html += '</div></div>';
+
+    html += '<div style="margin-top: 20px;"><h4>Night Shifts</h4><div class="fortnight-grid">';
+    for (let i = 0; i < 14; i++) {
+        html += `<div class="fortnight-checkbox"><input type="checkbox" class="fortnight-night-checkbox" value="${i}"><label style="margin-bottom: 0; font-size: 11px;">Night</label></div>`;
+    }
+    html += '</div></div>';
+
+    container.innerHTML = html;
+}
+
+function submitFortnightSelection() {
+    const dayChecks = Array.from(document.querySelectorAll('.fortnight-day-checkbox:checked')).map(cb => `Day-${cb.value}`);
+    const nightChecks = Array.from(document.querySelectorAll('.fortnight-night-checkbox:checked')).map(cb => `Night-${cb.value}`);
+    const selectedDays = [...dayChecks, ...nightChecks];
+
+    if (selectedDays.length === 0) {
+        showMessage('Please select at least one day', 'error');
+        return;
+    }
+
+    showMessage('Submitting swap request (pending officer approval)...', 'info');
+    callBackend('listShiftForSwap', {
+        email: currentUser.email,
+        name: currentUser.name,
+        date: pendingFortnightSwap.date,
+        jobType: pendingFortnightSwap.jobType,
+        location: pendingFortnightSwap.location,
+        isServiceDisruption: document.getElementById('swapIsServiceDisruption').checked,
+        availableDays: selectedDays.join(',')
+    }).then(result => {
+        if (result.error) showMessage(result.error, 'error');
+        else {
+            showMessage('✓ Swap request submitted and pending officer approval', 'success');
+            document.getElementById('swapDate').value = '';
+            document.getElementById('swapLocation').value = '';
+            document.getElementById('swapJobType').value = '';
+            document.getElementById('swapIsServiceDisruption').checked = false;
+            closeFortnightModal();
+            loadCurrentSwaps();
+        }
+    });
+}
+
+function closeFortnightModal() {
+    document.getElementById('fortnightModal').classList.remove('active');
+    pendingFortnightSwap = null;
+}
+
+function loadLocationCheckboxes() {
+    const container = document.getElementById('locationList');
+    let html = '';
+    LOCATIONS.forEach(loc => {
+        const checked = userLocations.includes(loc) ? ' checked' : '';
+        html += `<div class="location-item"><input type="checkbox" id="loc-${loc}" value="${loc}"${checked}><label for="loc-${loc}">${loc}</label></div>`;
+    });
+    container.innerHTML = html;
+}
+
+function saveSettings() {
+    const checkboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
+    userLocations = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (userLocations.length === 0) {
+        showMessage('Please select at least one location', 'error');
+        return;
+    }
+    
+    showMessage('✓ Settings saved', 'success');
+    populateSwapLocations();
+}
+
+function showMessage(text, type) {
+    const container = document.getElementById('messageContainer');
+    if (!text) {
+        container.innerHTML = '';
+        return;
+    }
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message ' + type;
+    messageEl.textContent = text;
+    container.innerHTML = '';
+    container.appendChild(messageEl);
+    if (type !== 'error') setTimeout(() => { if (messageEl.parentNode) messageEl.remove(); }, 3000);
+}
+
+function logout() {
+    document.getElementById('mainDashboard').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('emailInput').value = '';
+    document.getElementById('passwordInput').value = '';
+}
