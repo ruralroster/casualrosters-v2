@@ -87,6 +87,9 @@ const server = http.createServer((req, res) => {
         case 'denySwapWithReason': result = await denySwapWithReason(params.staffEmail, params.staffName, params.date, params.jobType, params.location, params.reason); break;
         case 'approveShiftRequest': result = await approveShiftRequest(params.email, params.name, params.date, params.jobType, params.location); break;
         case 'denyShiftRequest': result = await denyShiftRequest(params.email, params.name, params.date, params.jobType, params.location); break;
+        case 'updateUserLocations': result = await updateUserLocations(params.email, params.locations, params.role); break;
+        case 'updateUserAST': result = await updateUserAST(params.email, params.astQuals); break;
+        case 'countPendingRequests': result = await countPendingRequests(params.email); break;
         default: result = { error: 'Unknown action: ' + action };
       }
       res.writeHead(200);
@@ -369,8 +372,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
     const claimsResult = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:J' });
     const claimRows = claimsResult.data.values || [];
     const otherApplicants = [];
-    
-    // Determine if this is a swap (has originalEmail) or a request (no originalEmail)
     const isSwap = originalEmail && originalEmail.trim();
     
     for (let i = 0; i < claimRows.length; i++) {
@@ -384,7 +385,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       }
     }
     
-    // For SHIFT REQUESTS (no originalEmail): Only email the staff member
     if (!isSwap && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
         from: GMAIL_USER, to: claimingEmail,
@@ -393,7 +393,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       });
     }
     
-    // For SHIFT SWAPS (has originalEmail): Email both staff members
     if (isSwap) {
       if (claimingEmail && claimingEmail.trim()) {
         await transporter.sendMail({
@@ -409,7 +408,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
           html: `<p>Dear ${originalName},</p><p>Your shift swap request has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Staff member taking your shift: ${claimingName}</p>`
         });
       }
-      // Auto-deny other applicants for swaps only
       for (let applicant of otherApplicants) {
         if (applicant.email && applicant.email.trim()) {
           await transporter.sendMail({
@@ -430,8 +428,6 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
     const resolvedTimestamp = new Date().toLocaleString();
     const claimsResult = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:J' });
     const claimRows = claimsResult.data.values || [];
-    
-    // Determine if this is a swap (has originalEmail) or a request (no originalEmail)
     const isSwap = originalEmail && originalEmail.trim();
     
     for (let i = 0; i < claimRows.length; i++) {
@@ -441,7 +437,6 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
       }
     }
     
-    // Email only the applicant (request or swap)
     if (claimingEmail && claimingEmail.trim()) {
       const emailSubject = isSwap ? `[Rural Rosters] Shift Swap Not Approved` : `[Rural Rosters] Your Shift Request Denied`;
       const emailBody = isSwap 
@@ -556,6 +551,96 @@ async function denyShiftRequest(email, name, date, jobType, location) {
   } catch (err) { return { error: err.toString() }; }
 }
 
+async function updateUserLocations(email, locations, role) {
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:G'
+    });
+
+    const rows = result.data.values || [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).toLowerCase().trim() === normalizedEmail) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Users!C${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[locations]] }
+        });
+        console.log(`Updated locations for ${email}: ${locations}`);
+        return { success: true, message: 'Locations updated' };
+      }
+    }
+    
+    return { error: 'User not found' };
+  } catch (err) {
+    console.error('updateUserLocations error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function updateUserAST(email, astQuals) {
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:G'
+    });
+
+    const rows = result.data.values || [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).toLowerCase().trim() === normalizedEmail) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Users!G${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[astQuals]] }
+        });
+        console.log(`Updated AST quals for ${email}: ${astQuals}`);
+        return { success: true, message: 'AST qualifications updated' };
+      }
+    }
+    
+    return { error: 'User not found' };
+  } catch (err) {
+    console.error('updateUserAST error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function countPendingRequests(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+    
+    if (locations.length === 0) {
+      return 0;
+    }
+
+    let count = 0;
+
+    const requestsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Requests!A2:G'
+    });
+
+    const requestsRows = requestsResponse.data.values || [];
+    for (let row of requestsRows) {
+      if (row[5] && locations.includes(String(row[5]).trim()) && row[6] && String(row[6]).toUpperCase() === 'PENDING') {
+        count++;
+      }
+    }
+
+    console.log(`Officer ${email} has ${count} pending requests`);
+    return count;
+  } catch (err) {
+    console.error('countPendingRequests error:', err);
+    return 0;
+  }
+}
+
 function formatDate(dateVal) {
   if (!dateVal) return '';
   if (dateVal instanceof Date) {
@@ -580,7 +665,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`[SUCCESS] Rural Rosters Backend listening on port ${PORT}`);
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('[SHUTDOWN] SIGTERM received, shutting down gracefully');
   server.close(() => {
