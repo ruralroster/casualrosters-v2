@@ -789,15 +789,27 @@
 
     function saveSettings() {
         const checkboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
-        userLocations = Array.from(checkboxes).map(cb => cb.value);
+        const newLocations = Array.from(checkboxes).map(cb => cb.value);
         
-        if (userLocations.length === 0) {
+        if (newLocations.length === 0) {
             showMessage('Please select at least one location', 'error');
             return;
         }
         
-        showMessage('✓ Settings saved', 'success');
-        populateSwapLocations();
+        showMessage('Saving settings...', 'info');
+        callBackend('updateUserLocations', {
+            email: currentUser.email,
+            locations: newLocations.join(', '),
+            role: userRole
+        }).then(result => {
+            if (result.error) {
+                showMessage('Error: ' + result.error, 'error');
+            } else {
+                userLocations = newLocations;
+                showMessage('✓ Settings saved', 'success');
+                populateSwapLocations();
+            }
+        });
     }
 
     function showMessage(text, type) {
