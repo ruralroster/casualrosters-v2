@@ -369,6 +369,10 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
     const claimsResult = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:J' });
     const claimRows = claimsResult.data.values || [];
     const otherApplicants = [];
+    
+    // Determine if this is a swap (has originalEmail) or a request (no originalEmail)
+    const isSwap = originalEmail && originalEmail.trim();
+    
     for (let i = 0; i < claimRows.length; i++) {
       if (String(claimRows[i][4]).trim() === date && String(claimRows[i][5]).trim() === jobType && String(claimRows[i][6]).trim() === location) {
         if (claimRows[i][0] === claimingEmail && claimRows[i][2] === originalEmail) {
@@ -379,24 +383,45 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
         }
       }
     }
-    await transporter.sendMail({
-      from: GMAIL_USER, to: claimingEmail,
-      subject: `[Rural Rosters] Shift Swap Approved`,
-      html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Original staff member: ${originalName}</p><p>Please coordinate with ${originalName} to confirm the handover.</p>`
-    });
-    await transporter.sendMail({
-      from: GMAIL_USER, to: originalEmail,
-      subject: `[Rural Rosters] Your Shift Swap Approved`,
-      html: `<p>Dear ${originalName},</p><p>Your shift swap request has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Staff member taking your shift: ${claimingName}</p>`
-    });
-    for (let applicant of otherApplicants) {
+    
+    // For SHIFT REQUESTS (no originalEmail): Only email the staff member
+    if (!isSwap && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
-        from: GMAIL_USER, to: applicant.email,
-        subject: `[Rural Rosters] Shift Swap - Another Applicant Approved`,
-        html: `<p>Dear ${applicant.name},</p><p>Unfortunately, another applicant was approved for the following shift:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please try again for future shifts.</p>`
+        from: GMAIL_USER, to: claimingEmail,
+        subject: `[Rural Rosters] Your Shift Request Approved`,
+        html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
       });
     }
-    return { success: true, message: 'Swap approved and emails sent' };
+    
+    // For SHIFT SWAPS (has originalEmail): Email both staff members
+    if (isSwap) {
+      if (claimingEmail && claimingEmail.trim()) {
+        await transporter.sendMail({
+          from: GMAIL_USER, to: claimingEmail,
+          subject: `[Rural Rosters] Shift Swap Approved`,
+          html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Original staff member: ${originalName}</p><p>Please coordinate with ${originalName} to confirm the handover.</p>`
+        });
+      }
+      if (originalEmail && originalEmail.trim()) {
+        await transporter.sendMail({
+          from: GMAIL_USER, to: originalEmail,
+          subject: `[Rural Rosters] Your Shift Swap Approved`,
+          html: `<p>Dear ${originalName},</p><p>Your shift swap request has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Staff member taking your shift: ${claimingName}</p>`
+        });
+      }
+      // Auto-deny other applicants for swaps only
+      for (let applicant of otherApplicants) {
+        if (applicant.email && applicant.email.trim()) {
+          await transporter.sendMail({
+            from: GMAIL_USER, to: applicant.email,
+            subject: `[Rural Rosters] Shift Swap - Another Applicant Approved`,
+            html: `<p>Dear ${applicant.name},</p><p>Unfortunately, another applicant was approved for the following shift:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please try again for future shifts.</p>`
+          });
+        }
+      }
+    }
+    
+    return { success: true, message: 'Shift approved and emails sent' };
   } catch (err) { return { error: err.toString() }; }
 }
 
@@ -405,18 +430,32 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
     const resolvedTimestamp = new Date().toLocaleString();
     const claimsResult = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:J' });
     const claimRows = claimsResult.data.values || [];
+    
+    // Determine if this is a swap (has originalEmail) or a request (no originalEmail)
+    const isSwap = originalEmail && originalEmail.trim();
+    
     for (let i = 0; i < claimRows.length; i++) {
       if (claimRows[i][0] === claimingEmail && claimRows[i][2] === originalEmail && claimRows[i][4] === date) {
         await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `Marketplace Claims!I${i + 2}:J${i + 2}`, valueInputOption: 'RAW', resource: { values: [['Denied', resolvedTimestamp]] } });
         break;
       }
     }
-    await transporter.sendMail({
-      from: GMAIL_USER, to: claimingEmail,
-      subject: `[Rural Rosters] Shift Swap Not Approved`,
-      html: `<p>Dear ${claimingName},</p><p>Unfortunately, your request to cover the shift has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p>`
-    });
-    return { success: true, message: 'Swap denied and email sent' };
+    
+    // Email only the applicant (request or swap)
+    if (claimingEmail && claimingEmail.trim()) {
+      const emailSubject = isSwap ? `[Rural Rosters] Shift Swap Not Approved` : `[Rural Rosters] Your Shift Request Denied`;
+      const emailBody = isSwap 
+        ? `<p>Dear ${claimingName},</p><p>Unfortunately, your request to cover the shift has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p>`
+        : `<p>Dear ${claimingName},</p><p>Unfortunately, your shift request has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p>`;
+      
+      await transporter.sendMail({
+        from: GMAIL_USER, to: claimingEmail,
+        subject: emailSubject,
+        html: emailBody
+      });
+    }
+    
+    return { success: true, message: 'Shift denied and email sent' };
   } catch (err) { return { error: err.toString() }; }
 }
 
