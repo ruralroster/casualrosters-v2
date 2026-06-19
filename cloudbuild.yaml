@@ -23,7 +23,7 @@ steps:
       - '--region=australia-southeast1'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--service-account=rural-rosters-backend@rural-rosters.iam.gserviceaccount.com'
+      - '--service-account=rural-rosters-backend-staging@rural-rosters-staging.iam.gserviceaccount.com'
 images:
   - 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/casualrosters/ruralrostersproxy:$COMMIT_SHA'
 options:
