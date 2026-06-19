@@ -1,19 +1,24 @@
-const http = require('http'); 
+/**
+ * Rural Rosters Backend V2 - Fixed
+ * Combines V1 initialization pattern with V2 swap/marketplace functions
+ */
+
+const http = require('http');
 const { google } = require('googleapis');
 const { JWT } = require('google-auth-library');
 const nodemailer = require('nodemailer');
 
 const SERVICE_ACCOUNT = {
   type: "service_account",
-  project_id: "rural-rosters",
-  private_key_id: "3f30d8812c36bf4d32ab0492eee60ae27f27d829",
-  private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDsvjaq0OtGrXFL\nXq0122BUAjKwq3Z9zlD9K6n6EVyoH9gojRnpoodqHSJY3EIq3xdRzXKiK8nly9Qi\ndTyRVmS/YR5t4TNFfIi01vOek23tj2wmU2iqPO2VSmyLOgVCEu/qjTVrd/D6X3OQ\n2h7ueXgtbOJWuTf3WPZ/LJ2XG6SIv2cRODOlQ0dMjsJOAlVAPU3XGlXGJvBfqt13\n2UA/jwbNr7oDa2q3l7aP8O1FJIRgzrKEkJ78kFse/V0lBN0CyDbXtIL3jx5cJpom\npd1pJCgDgciXzPem0H2btMlHjFcRjuFk8D8gcNDxEj0iBqsFD+EFhQjZIHGGz1JA\nnTxl0u6HAgMBAAECggEAVPZu6B7SUSst3b68qvdwOrYPOxhODhhdOH7TIcvZVP0Y\ntnTtN8v8jTinevyRQpGN7O2ulkTg0He2SieI9R/sSEKyiPypSebHqR77j42ZhghS\n5+5HQdFb8pgjHFRWTsA9GhBTe54v/asD7phZQXyWhLbvA/C1BTAIRtvcMr7Y7boS\nrpYgb1OQpEXUkcAmu6Elf0UvrgcqYmB4t17m2ky1/kNqyIxtGIWviWHr1zHtfabn\nrlMjixNEJzXVS0ju15d69aIPj44+C2NQkJN8qotgOTv+aU+Eg4FzUqV4YF5JR09Q\npYvqFwO1S2WaenmUU4DhEB4UVXis85rR13h/3ycvAQKBgQD3TXcqDNLV7BL3G4BD\n0ujd5750gaIkVJeqgWGGHNDCz+TaVfOPu8FwG4nxbRlgYHyvlWFzWCk9zpoj9BYw\nhkTV/z0MzGIUGIpXE1O8u8aGM/k9Xbq6gyc0VPaCWRbYQ2YdSlLWKaqNsJxrGHJY\nvKVquLaHIMvE4xnf4F6ttYGOCwKBgQD1Ea1ehWnTVnyReKOWLM8GvnsQbV6RE6oQ\n6xCmW02WazrterZQTocfoSSTbdYl6+Wh4EOGkVirIcfrghr4whqvxEw3SHT9ckSI\n3fymchE8wPIrYwTaXRDUucKvW5QKaZTTjOT9Tr53VRC/7Mzu4AsnDRPFE8q4skC1\nDONlria69QKBgDoISKVqevNOQakRIAlKbfDc1/mZDgZ+f1S4pb0F+AsvI+IEd3JM\nOflnzPgFhQXzvm6pnEOn9Y2WdN9pAOgEKhUZnybosz9J/vSuCWFpow2NFrjKzO3F\npyaFpY8y/sRjFIxdC5FMF8TGI/6RrwuZwSuJCvQswwSB0mmRykXzKOK/AoGAQLEN\n5umo6dTmxS/nXvktHUajDc8RK5LZTeX/Wyq27IIZ6B6Aiepw2PScxx4zbYc78uNU\nb+1mTqZ4M78Ah7IVgVh8FgvWdiD33nla/EUQL8VvJ+zXlx0CGGWA8vFlvunoE4AZ\n4pQqyy11YnSMFHKn/wMAuQFkfiTv19szG+BA8RECgYEApNOwO4Hq7IXsHJeERoB/\n0HdtJtFpfo09xUD/grjipzCzKF/fJgapHCFq7a5l56igwbVehQKTMHiV8BHs4GeI\nmQ85Bd9w14NdlK1YfufpcPylP701JsGvzDPtUaGyZ/3cPxjQlCPJIoLp/YQeXNa0\nieXG73xh8R9zF2AECz1Tk6E=\n-----END PRIVATE KEY-----\n",
-  client_email: "rural-rosters-backend@rural-rosters.iam.gserviceaccount.com",
-  client_id: "110632316482172106567",
+  project_id: "rural-rosters-staging",
+  private_key_id: "55792e2284826c5a9c8843afefc1cce54e5fb964",
+  private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQCtrpDBg6T5Z/uh\nquzh2yfGLmDW9Y/+B7kLaWqCOJCSLfvzhp19hPFCw0Xxi09zguTe99eUozp8nlNA\nY3j8pkRmaVVN/sZdZPpFIy5Tg5LneWH0VgwXJD0DYWUTk0k80+3O58jBmgMR8FOb\nYXAaZvDrIdiYhEq8aQUBzoESToZASof9ABA38YCE0gZTEhD5fTkmcxtsHa7JxGO9\nprf2IrV/h89haoXjp0J0Yj4Sqm5ofEtZhonobwiVlTorQvuOsGaJUIf4gd+dTwmU\ngBKuU3n9eqDjwt5TKhqanJZPApOryk3/zWXUYTS70Ic6D/9JC2TqjpoEpOd9xE81\nj4YKuAXbAgMBAAECggEAHvPGwW30FyyUWB3thFy5rGR0hqqRpEx9Ck8Zl6Z8AUkn\npyE87PMlyeeiDedtW+EeZ6wUo90pHa9bl9SCacg51WR9Ot6mPFu0DGE2LtT6d70W\nm2RAWFlxdCpFyKTNfwUn0uFU0kfftzE0vTKyt0nUMptADgI5jXVL2qQSNZB/9XHn\nt9QOyOWOSYWtA3zYnvqjxevyZqAvVsEB6KdYRVPToRp2f/3KeF7bLgUMIHww+GTU\niMF7ch41W//jcZz+cY0uXCUomZajIUiaCHQI3w4t9lmdrNul4qQEufUHFcRUcnqj\nl0+kjNtiF/f7s/tFMaoGGaVggBjwsblOFWZtv/ZYPQKBgQDXz7JGpWUP4K7CWr2F\n4KtL61vzUKjDldNlWywhOyoNapN0/SxamSBGHAkeYMihpzuCDb3gzlA0vGmsK2xe\n1VtCDTHRtbjpQTqKfQKSdClkRXAzLisM5vxLwWvLnO8jFijOphzzEM6hLJwEQrQ6\nTVqwobYvZCffGMSlRwJpbjZXrQKBgQDOBnJjo+w1vmh+vdfYYBVHB9QiDlu+8HfH\nilq+FOmqQ6lNEOPzz60wYgf/0wQlwQyZbz99FkUyYRrSKqhwagnuJu6uv5AwINbu\nQy8L7KL8/nEpQfbt2xcD8nUUJltUHcFdo/Hg+K7is0VO/Jj+4gphBcCqEj99UQUP\nXgeZ9MKkpwKBgQDKpxFsf4GAQGc6wIS5w7h3CSMGP5bKWtXwloXBCtK5WHvxXpAY\n3zPMQiVZ7l5YVjZuMMM9596vNsIwV3JjNwyD4OoIWBG0j3kOdMdGiWgY7Y+nr9Hj\nQsBlztKPl+WDWBqnuprysLSn6sDyy0R8fwkLVj9DD1TVjWeTIDQmlsTW3QKBgQCk\nm44FglEV154RtYihPpOBfwXEeAhhlCt/aFF8EaVn/ktkYZxfjoxnXcvaYDSuHYH9\njV8CiCqdR+xwAtk1h+OLPdvyDugbLAHNuCv8sQLAdGLhfezWufe3lZ5pjQPnPybh\ntD1rbAX+5xD3PObYrq1wO3Jl79J+Q59xWcVlAqQJfQKBgQDGfgjAG9BEinbGOxDn\nFKS3aES/iW5O2bKSB/0sCB8GrK5Wz54Zwqkwykga6REQblGnqBlRy87tuoxYFDVN\na+UfgcSdciTWCtG6xkoson507WMP+ARtNbEZifeZiD8IfR+O/bi+2cxARlvztmY3\nDpjr7FcZT+S0YJSJ0yq80sBPlQ==\n-----END PRIVATE KEY-----\n",
+  client_email: "rural-rosters-backend-staging@rural-rosters-staging.iam.gserviceaccount.com",
+  client_id: "111139404380576050131",
   auth_uri: "https://accounts.google.com/o/oauth2/auth",
   token_uri: "https://oauth2.googleapis.com/token",
   auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/rural-rosters-backend%40rural-rosters.iam.gserviceaccount.com",
+  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/rural-rosters-backend-staging%40rural-rosters-staging.iam.gserviceaccount.com",
   universe_domain: "googleapis.com"
 };
 
@@ -23,6 +28,7 @@ const SHEET_ID = '1iG4SwN4LzFnzKNht2uy8R8YV6XKIftRTbmfW7_YZwtM';
 
 console.log('[INIT] Starting backend initialization...');
 
+// Initialize directly (V1 pattern - proven to work)
 let auth, sheets, transporter;
 
 try {
@@ -59,7 +65,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-  if (req.method === 'GET' && req.url === '/') { res.writeHead(200); res.end(JSON.stringify({ status: 'ok', service: 'Rural Rosters API' })); return; }
+  if (req.method === 'GET' && req.url === '/') { res.writeHead(200); res.end(JSON.stringify({ status: 'ok', service: 'Rural Rosters API V2' })); return; }
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
 
   let body = '';
@@ -71,6 +77,7 @@ const server = http.createServer((req, res) => {
       switch (action) {
         case 'checkUserExists': result = await checkUserExists(params.email, params.password); break;
         case 'getOfficerLocations': result = await getOfficerLocations(params.email); break;
+        case 'getStaffLocations': result = await getStaffLocations(params.email); break;
         case 'getOfficerVacancies': result = await getOfficerVacancies(params.email); break;
         case 'getStaffAvailableShifts': result = await getStaffAvailableShifts(params.email); break;
         case 'requestShifts': result = await requestShifts(params.email, params.name, params.shifts); break;
@@ -87,7 +94,9 @@ const server = http.createServer((req, res) => {
         case 'denySwapWithReason': result = await denySwapWithReason(params.staffEmail, params.staffName, params.date, params.jobType, params.location, params.reason); break;
         case 'approveShiftRequest': result = await approveShiftRequest(params.email, params.name, params.date, params.jobType, params.location); break;
         case 'denyShiftRequest': result = await denyShiftRequest(params.email, params.name, params.date, params.jobType, params.location); break;
-        case 'updateStaffLocations': result = await updateStaffLocations(params.email, params.locations); break;
+        case 'updateUserLocations': result = await updateUserLocations(params.email, params.locations, params.role); break;
+        case 'updateUserAST': result = await updateUserAST(params.email, params.astQuals); break;
+        case 'countPendingRequests': result = await countPendingRequests(params.email); break;
         default: result = { error: 'Unknown action: ' + action };
       }
       res.writeHead(200);
@@ -370,8 +379,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
     const claimsResult = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:J' });
     const claimRows = claimsResult.data.values || [];
     const otherApplicants = [];
-    
-    // Determine if this is a swap (has originalEmail) or a request (no originalEmail)
     const isSwap = originalEmail && originalEmail.trim();
     
     for (let i = 0; i < claimRows.length; i++) {
@@ -385,7 +392,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       }
     }
     
-    // For SHIFT REQUESTS (no originalEmail): Only email the staff member
     if (!isSwap && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
         from: GMAIL_USER, to: claimingEmail,
@@ -394,7 +400,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       });
     }
     
-    // For SHIFT SWAPS (has originalEmail): Email both staff members
     if (isSwap) {
       if (claimingEmail && claimingEmail.trim()) {
         await transporter.sendMail({
@@ -410,7 +415,6 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
           html: `<p>Dear ${originalName},</p><p>Your shift swap request has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Staff member taking your shift: ${claimingName}</p>`
         });
       }
-      // Auto-deny other applicants for swaps only
       for (let applicant of otherApplicants) {
         if (applicant.email && applicant.email.trim()) {
           await transporter.sendMail({
@@ -431,8 +435,6 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
     const resolvedTimestamp = new Date().toLocaleString();
     const claimsResult = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:J' });
     const claimRows = claimsResult.data.values || [];
-    
-    // Determine if this is a swap (has originalEmail) or a request (no originalEmail)
     const isSwap = originalEmail && originalEmail.trim();
     
     for (let i = 0; i < claimRows.length; i++) {
@@ -442,7 +444,6 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
       }
     }
     
-    // Email only the applicant (request or swap)
     if (claimingEmail && claimingEmail.trim()) {
       const emailSubject = isSwap ? `[Rural Rosters] Shift Swap Not Approved` : `[Rural Rosters] Your Shift Request Denied`;
       const emailBody = isSwap 
@@ -557,6 +558,96 @@ async function denyShiftRequest(email, name, date, jobType, location) {
   } catch (err) { return { error: err.toString() }; }
 }
 
+async function updateUserLocations(email, locations, role) {
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:G'
+    });
+
+    const rows = result.data.values || [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).toLowerCase().trim() === normalizedEmail) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Users!C${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[locations]] }
+        });
+        console.log(`Updated locations for ${email}: ${locations}`);
+        return { success: true, message: 'Locations updated' };
+      }
+    }
+    
+    return { error: 'User not found' };
+  } catch (err) {
+    console.error('updateUserLocations error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function updateUserAST(email, astQuals) {
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:G'
+    });
+
+    const rows = result.data.values || [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).toLowerCase().trim() === normalizedEmail) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Users!G${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[astQuals]] }
+        });
+        console.log(`Updated AST quals for ${email}: ${astQuals}`);
+        return { success: true, message: 'AST qualifications updated' };
+      }
+    }
+    
+    return { error: 'User not found' };
+  } catch (err) {
+    console.error('updateUserAST error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function countPendingRequests(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+    
+    if (locations.length === 0) {
+      return 0;
+    }
+
+    let count = 0;
+
+    const requestsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Requests!A2:G'
+    });
+
+    const requestsRows = requestsResponse.data.values || [];
+    for (let row of requestsRows) {
+      if (row[5] && locations.includes(String(row[5]).trim()) && row[6] && String(row[6]).toUpperCase() === 'PENDING') {
+        count++;
+      }
+    }
+
+    console.log(`Officer ${email} has ${count} pending requests`);
+    return count;
+  } catch (err) {
+    console.error('countPendingRequests error:', err);
+    return 0;
+  }
+}
+
 function formatDate(dateVal) {
   if (!dateVal) return '';
   if (dateVal instanceof Date) {
@@ -570,18 +661,11 @@ function formatDate(dateVal) {
 
 const PORT = process.env.PORT || 8080;
 
-server.on('error', (err) => {
-  console.error('[SERVER ERROR]', err.message);
-  console.error(err);
-  process.exit(1);
-});
-
 console.log(`[STARTUP] Attempting to listen on port ${PORT}...`);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[SUCCESS] Rural Rosters Backend listening on port ${PORT}`);
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('[SHUTDOWN] SIGTERM received, shutting down gracefully');
   server.close(() => {
@@ -589,25 +673,3 @@ process.on('SIGTERM', () => {
     process.exit(0);
   });
 });
-
-async function updateStaffLocations(email, locations) {
-  try {
-    const normalizedEmail = email.toLowerCase().trim();
-    const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Users!A2:G' });
-    const rows = result.data.values || [];
-    
-    for (let i = 0; i < rows.length; i++) {
-      if (String(rows[i][0]).toLowerCase().trim() === normalizedEmail) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `Users!C${i + 2}`,
-          valueInputOption: 'RAW',
-          resource: { values: [[locations]] }
-        });
-        return { success: true, message: 'Locations updated' };
-      }
-    }
-    
-    return { error: 'User not found' };
-  } catch (err) { return { error: err.toString() }; }
-}
