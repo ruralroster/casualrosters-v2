@@ -120,7 +120,7 @@
 </div>
 
 <script>
-    const BACKEND_URL = 'https://ruralrostersproxy-staging-168129620374.australia-southeast1.run.app';
+    const BACKEND_URL = 'https://ruralrostersproxy-168129620374.australia-southeast1.run.app';
     const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
     const JOB_TYPES_BY_LOCATION = {
         'Innisfail': ['Day', 'Night', 'RFDS'],
@@ -165,7 +165,11 @@
             return;
         }
 
+        showMessage('Logging in...', 'info');
+        console.log('Attempting login with:', email);
+        
         callBackend('checkUserExists', {email, password}).then(user => {
+            console.log('Backend response:', user);
             if (user && user.error) {
                 showMessage(user.error, 'error');
                 return;
@@ -174,8 +178,14 @@
                 currentUser = { email: user.email, name: user.name };
                 userRole = user.role;
                 userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
+                console.log('Login successful:', currentUser);
                 showDashboard();
+            } else {
+                showMessage('Login failed - no response from server', 'error');
             }
+        }).catch(err => {
+            console.error('Login error:', err);
+            showMessage('Login failed: ' + err.message, 'error');
         });
     }
 
@@ -789,21 +799,23 @@
 
     function saveSettings() {
         const checkboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
-        userLocations = Array.from(checkboxes).map(cb => cb.value);
+        const newLocations = Array.from(checkboxes).map(cb => cb.value);
         
-        if (userLocations.length === 0) {
+        if (newLocations.length === 0) {
             showMessage('Please select at least one location', 'error');
             return;
         }
         
         showMessage('Saving settings...', 'info');
-        callBackend('updateStaffLocations', {
+        callBackend('updateUserLocations', {
             email: currentUser.email,
-            locations: userLocations.join(', ')
+            locations: newLocations.join(', '),
+            role: userRole
         }).then(result => {
             if (result.error) {
-                showMessage('Error saving settings: ' + result.error, 'error');
+                showMessage('Error: ' + result.error, 'error');
             } else {
+                userLocations = newLocations;
                 showMessage('✓ Settings saved', 'success');
                 populateSwapLocations();
             }
