@@ -1,3 +1,8 @@
+/**
+ * Rural Rosters Backend V2 - Fixed
+ * Combines V1 initialization pattern with V2 swap/marketplace functions
+ */
+
 const http = require('http');
 const { google } = require('googleapis');
 const { JWT } = require('google-auth-library');
@@ -23,6 +28,7 @@ const SHEET_ID = '1iG4SwN4LzFnzKNht2uy8R8YV6XKIftRTbmfW7_YZwtM';
 
 console.log('[INIT] Starting backend initialization...');
 
+// Initialize directly (V1 pattern - proven to work)
 let auth, sheets, transporter;
 
 try {
@@ -59,7 +65,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-  if (req.method === 'GET' && req.url === '/') { res.writeHead(200); res.end(JSON.stringify({ status: 'ok', service: 'Rural Rosters API' })); return; }
+  if (req.method === 'GET' && req.url === '/') { res.writeHead(200); res.end(JSON.stringify({ status: 'ok', service: 'Rural Rosters API V2' })); return; }
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
 
   let body = '';
@@ -71,6 +77,7 @@ const server = http.createServer((req, res) => {
       switch (action) {
         case 'checkUserExists': result = await checkUserExists(params.email, params.password); break;
         case 'getOfficerLocations': result = await getOfficerLocations(params.email); break;
+        case 'getStaffLocations': result = await getStaffLocations(params.email); break;
         case 'getOfficerVacancies': result = await getOfficerVacancies(params.email); break;
         case 'getStaffAvailableShifts': result = await getStaffAvailableShifts(params.email); break;
         case 'requestShifts': result = await requestShifts(params.email, params.name, params.shifts); break;
@@ -653,12 +660,6 @@ function formatDate(dateVal) {
 }
 
 const PORT = process.env.PORT || 8080;
-
-server.on('error', (err) => {
-  console.error('[SERVER ERROR]', err.message);
-  console.error(err);
-  process.exit(1);
-});
 
 console.log(`[STARTUP] Attempting to listen on port ${PORT}...`);
 server.listen(PORT, '0.0.0.0', () => {
