@@ -653,7 +653,7 @@
             } else {
                 let html = '';
                 swaps.forEach(s => {
-                    const availableDaysText = s.availableDays ? `<div style="color: #666; font-size: 12px; margin-top: 5px;"><strong>Can work:</strong> ${s.availableDays}</div>` : '';
+                    const availableDaysText = s.availableDays ? `<div style="color: #666; font-size: 12px; margin-top: 5px;"><strong>Can work:</strong> ${formatAvailableDays(s.date, s.availableDays)}</div>` : '';
                     html += `<div class="shift-item">
                         <div><strong>${s.date} - ${s.jobType} @ ${s.location}</strong></div>
                         <div style="color: #666; font-size: 13px;">Offered by: ${s.originalName}</div>
@@ -858,6 +858,33 @@
         if (type !== 'error') setTimeout(() => { if (messageEl.parentNode) messageEl.remove(); }, 3000);
     }
 
+
+    // Converts stored fortnight index format (e.g. "Day-0,Night-3") to readable dates
+    // anchored from the Monday of the swap shift's week (e.g. "12/06/26 Day, 15/06/26 Night")
+    function formatAvailableDays(shiftDateStr, availableDaysStr) {
+        if (!availableDaysStr) return '';
+        const parts = shiftDateStr.split('/');
+        if (parts.length !== 3) return availableDaysStr;
+        const shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        const fortnightStart = new Date(shiftDate);
+        const dayOfWeek = fortnightStart.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
+        fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
+        return availableDaysStr.split(',').map(entry => {
+            const trimmed = entry.trim();
+            const dashIdx = trimmed.lastIndexOf('-');
+            if (dashIdx === -1) return trimmed;
+            const type = trimmed.substring(0, dashIdx);
+            const idx = parseInt(trimmed.substring(dashIdx + 1));
+            if (isNaN(idx)) return trimmed;
+            const d = new Date(fortnightStart);
+            d.setDate(d.getDate() + idx);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = String(d.getFullYear()).slice(-2);
+            return day + '/' + month + '/' + year + ' ' + type;
+        }).join(', ');
+    }
     function logout() {
         currentUser = null;
         userRole = null;
