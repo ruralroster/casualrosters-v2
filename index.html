@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -67,6 +67,8 @@
         .fortnight-day { text-align: center; font-size: 11px; font-weight: 600; padding: 8px; background: #f0f0f0; border-radius: 3px; }
         .fortnight-checkbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 3px; min-height: 80px; }
         .fortnight-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .settings-section { margin-bottom: 30px; }
+        .settings-section h4 { margin-bottom: 12px; margin-top: 0; }
     </style>
 </head>
 <body>
@@ -120,7 +122,9 @@
 </div>
 
 <script>
-    const BACKEND_URL = 'https://ruralrostersproxy-staging-191282140713.australia-southeast1.run.app';;
+    // UPDATE THIS after first staging deploy — get URL from Cloud Run console
+    const BACKEND_URL = 'STAGING_URL_PLACEHOLDER';
+
     const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
     const JOB_TYPES_BY_LOCATION = {
         'Innisfail': ['Day', 'Night', 'RFDS'],
@@ -134,10 +138,13 @@
         'Telehealth': ['Day'],
         'TestHub': ['Day', 'Night', 'RFDS']
     };
-    
+    // AST qualification options — Emergency is always held, these are additional
+    const AST_QUALS = ['Anaesthetics', 'O&G'];
+
     let currentUser = null;
     let userRole = null;
     let userLocations = [];
+    let userQuals = ['Emergency'];
     let officerLocations = [];
     let pendingDenySwap = null;
     let pendingFortnightSwap = null;
@@ -159,17 +166,13 @@
     function loginWithEmail() {
         const email = document.getElementById('emailInput').value.trim().toLowerCase();
         const password = document.getElementById('passwordInput').value;
-        
+
         if (!email || !password) {
             showMessage('Please enter both email and password', 'error');
             return;
         }
 
-        showMessage('Logging in...', 'info');
-        console.log('Attempting login with:', email);
-        
         callBackend('checkUserExists', {email, password}).then(user => {
-            console.log('Backend response:', user);
             if (user && user.error) {
                 showMessage(user.error, 'error');
                 return;
@@ -178,14 +181,10 @@
                 currentUser = { email: user.email, name: user.name };
                 userRole = user.role;
                 userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
-                console.log('Login successful:', currentUser);
+                // Fix: actually load and store AST quals from login response
+                userQuals = user.astQuals ? user.astQuals.split(',').map(q => q.trim()) : ['Emergency'];
                 showDashboard();
-            } else {
-                showMessage('Login failed - no response from server', 'error');
             }
-        }).catch(err => {
-            console.error('Login error:', err);
-            showMessage('Login failed: ' + err.message, 'error');
         });
     }
 
@@ -193,7 +192,7 @@
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainDashboard').style.display = 'block';
         document.getElementById('userNameDisplay').textContent = currentUser.name || currentUser.email;
-        
+
         if (userRole === 'Officer') {
             callBackend('getOfficerLocations', {email: currentUser.email}).then(locs => {
                 officerLocations = locs || [];
@@ -209,7 +208,7 @@
     function setupTabs() {
         const tabsContainer = document.getElementById('tabsContainer');
         const tabsContent = document.getElementById('tabsContent');
-        
+
         tabsContainer.innerHTML = '';
         tabsContent.innerHTML = '';
 
@@ -236,7 +235,11 @@
                 <button class="tab-button" onclick="switchTab(2, this)">Settings</button>
             `;
             tabsContent.innerHTML = `
-                <div id="tab-0" class="tab-content active"><h3>Available Shifts</h3><button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button><div id="shiftsContainer"></div></div>
+                <div id="tab-0" class="tab-content active">
+                    <h3>Available Shifts</h3>
+                    <button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button>
+                    <div id="shiftsContainer"></div>
+                </div>
                 <div id="tab-1" class="tab-content">
                     <h3>Shift Swaps</h3>
                     <h4>Current Shifts Up for Swap (Approved)</h4>
@@ -250,13 +253,21 @@
                 </div>
                 <div id="tab-2" class="tab-content">
                     <h3>Settings</h3>
-                    <h4>Work Location Preferences</h4>
-                    <div id="locationList"></div>
-                    <button class="btn-primary" style="margin-top: 20px;" onclick="saveSettings()">Save Settings</button>
+                    <div class="settings-section">
+                        <h4>Work Location Preferences</h4>
+                        <div id="locationList"></div>
+                    </div>
+                    <div class="settings-section">
+                        <h4>AST Qualifications</h4>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Emergency is always held. Select any additional AST qualifications below.</p>
+                        <div id="astList"></div>
+                    </div>
+                    <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
                 </div>
             `;
             populateSwapLocations();
             loadLocationCheckboxes();
+            loadASTCheckboxes();
         }
     }
 
@@ -265,7 +276,7 @@
         document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
         document.getElementById('tab-' + idx).classList.add('active');
         btn.classList.add('active');
-        
+
         if (userRole === 'Officer') {
             if (idx === 0) loadMyVacancies();
             if (idx === 1) loadOfficerApprovals();
@@ -276,6 +287,10 @@
         }
     }
 
+    // ============================================================
+    // VACANCIES (OFFICER)
+    // ============================================================
+
     function loadMyVacancies() {
         showMessage('Loading vacancies...', 'info');
         callBackend('getOfficerVacancies', {email: currentUser.email}).then(vacancies => {
@@ -285,14 +300,13 @@
 
     function renderVacancies(vacancies) {
         const container = document.getElementById('vacanciesContainer');
-        
+
         if (!vacancies || vacancies.length === 0) {
             container.innerHTML = '<p style="color: #999;">No vacancies yet</p>';
             return;
         }
 
         let html = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr>';
-        
         vacancies.forEach((vac) => {
             let dateString = '';
             if (vac.date && vac.date.includes('/')) {
@@ -301,7 +315,6 @@
                     dateString = parts[2] + '-' + String(parts[1]).padStart(2, '0') + '-' + String(parts[0]).padStart(2, '0');
                 }
             }
-            
             html += `<tr>
                 <td><input type="date" class="vac-date" value="${dateString}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
                 <td style="padding: 12px;">${vac.location}</td>
@@ -316,24 +329,24 @@
     function addVacancyRow() {
         const container = document.getElementById('vacanciesContainer');
         let table = container.querySelector('table');
-        
+
         if (!table) {
             container.innerHTML = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr></table>';
             table = container.querySelector('table');
         }
-        
+
         const newRow = table.insertRow();
-        
         let locHtml = '<select class="vac-location" onchange="updateNewRowJobTypes(this)" style="width: 100%; padding: 6px;"><option value="">Select Location</option>';
         officerLocations.forEach(loc => {
             locHtml += `<option value="${loc}">${loc}</option>`;
         });
         locHtml += '</select>';
-        
-        newRow.innerHTML = `<td><input type="date" class="vac-date" style="width: 100%; padding: 6px; border: 1px solid #ddd;"></td>
-        <td>${locHtml}</td>
-        <td><select class="vac-jobtype" style="width: 100%; padding: 6px;"><option value="">Select Job Type</option></select></td>
-        <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>`;
+
+        newRow.innerHTML = `
+            <td><input type="date" class="vac-date" style="width: 100%; padding: 6px; border: 1px solid #ddd;"></td>
+            <td>${locHtml}</td>
+            <td><select class="vac-jobtype" style="width: 100%; padding: 6px;"><option value="">Select Job Type</option></select></td>
+            <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>`;
     }
 
     function updateNewRowJobTypes(select) {
@@ -341,7 +354,7 @@
         const row = select.closest('tr');
         const jobTypeSelect = row.querySelector('.vac-jobtype');
         const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
-        
+
         jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
         jobTypes.forEach(jt => {
             const opt = document.createElement('option');
@@ -358,23 +371,23 @@
     function saveVacancies() {
         const rows = document.querySelectorAll('#vacanciesContainer table tr');
         const vacancies = [];
-        
+
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             const dateInput = row.querySelector('.vac-date');
             const jobtypeSelect = row.querySelector('.vac-jobtype');
             const locationSelect = row.querySelector('.vac-location');
-            
+
             if (dateInput && jobtypeSelect && locationSelect && !dateInput.disabled) {
                 let date = dateInput.value;
                 const jobType = jobtypeSelect.value;
                 const location = locationSelect.value;
-                
+
                 if (date && date.includes('-')) {
                     const [year, month, day] = date.split('-');
                     date = day + '/' + month + '/' + year;
                 }
-                
+
                 if (date && jobType && location) {
                     vacancies.push({ date, jobType, location });
                 }
@@ -387,19 +400,18 @@
         }
 
         showMessage('Saving vacancies...', 'info');
-
         callBackend('saveOfficerVacancies', {
             email: currentUser.email,
             vacancies: vacancies
         }).then(result => {
-            if (result.error) {
-                showMessage(result.error, 'error');
-            } else {
-                showMessage('✓ Vacancies saved', 'success');
-                loadMyVacancies();
-            }
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Vacancies saved', 'success'); loadMyVacancies(); }
         });
     }
+
+    // ============================================================
+    // APPROVALS (OFFICER)
+    // ============================================================
 
     function loadOfficerApprovals() {
         showMessage('Loading approvals...', 'info');
@@ -413,10 +425,8 @@
 
     function renderApprovals(pending, past) {
         const container = document.getElementById('approvalsContainer');
-        
         let html = '';
 
-        // Outstanding Cover Requests
         if (pending.length === 0) {
             html += '<h4>Outstanding Cover Requests</h4><p style="color: #999;">No outstanding requests</p>';
         } else {
@@ -435,13 +445,13 @@
                     <div class="shift-item-header">
                         <strong>${first.date} - ${first.jobType} @ ${first.location}</strong>
                     </div>`;
-                
+
                 claimList.forEach((claim) => {
                     const isSwap = claim.type === 'swap_claim';
-                    const typeBadge = isSwap 
+                    const typeBadge = isSwap
                         ? `<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP CLAIM</span>`
                         : `<span style="background: #cfe2ff; color: #084298; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SHIFT REQUEST</span>`;
-                    
+
                     html += `<div class="applicant-row">
                         <div class="applicant-info">
                             <strong>${claim.claimingName}</strong> ${typeBadge}<br>
@@ -457,18 +467,15 @@
             }
         }
 
-        // Past Cover Requests
         html += '<h4>Past Cover Requests</h4>';
         if (past.length === 0) {
             html += '<p style="color: #999;">No resolved requests</p>';
         } else {
             html += '<table>';
-            html += '<tr><th>Shift Date</th><th>Location</th><th>Job Type</th><th>Date Resolved</th><th>Shift Approved For</th><th>Shift Denied For</th></tr>';
-            
+            html += '<tr><th>Shift Date</th><th>Location</th><th>Job Type</th><th>Date Resolved</th><th>Approved For</th><th>Denied For</th></tr>';
             past.forEach(item => {
                 const approvedLink = item.approved ? `<a href="mailto:${item.approved.email}">${item.approved.name}</a>` : '-';
                 const deniedLinks = item.denied.length > 0 ? item.denied.map(d => `<a href="mailto:${d.email}">${d.name}</a>`).join(', ') : '-';
-                
                 html += `<tr>
                     <td>${item.date}</td>
                     <td>${item.location}</td>
@@ -485,11 +492,10 @@
     }
 
     function approveSwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
-        showMessage('Approving swap...', 'info');
+        showMessage('Approving...', 'info');
         callBackend('approveSwap', {
             claimingEmail, claimingName, originalEmail, originalName,
-            officerEmail: currentUser.email,
-            officerName: currentUser.name,
+            officerEmail: currentUser.email, officerName: currentUser.name,
             date, jobType, location
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
@@ -498,17 +504,20 @@
     }
 
     function denySwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
-        showMessage('Denying swap...', 'info');
+        showMessage('Denying...', 'info');
         callBackend('denySwap', {
             claimingEmail, claimingName, originalEmail, originalName,
-            officerEmail: currentUser.email,
-            officerName: currentUser.name,
+            officerEmail: currentUser.email, officerName: currentUser.name,
             date, jobType, location
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Denied', 'success'); loadOfficerApprovals(); }
         });
     }
+
+    // ============================================================
+    // PENDING SWAPS (OFFICER)
+    // ============================================================
 
     function loadPendingSwaps() {
         showMessage('Loading pending swaps...', 'info');
@@ -519,7 +528,7 @@
 
     function renderPendingSwaps(listings) {
         const container = document.getElementById('swapsContainer');
-        
+
         if (!listings || listings.length === 0) {
             container.innerHTML = '<p style="color: #999;">No pending swaps</p>';
             return;
@@ -541,22 +550,16 @@
                 </div>
             </div>`;
         });
-        
         container.innerHTML = html;
     }
 
     function approvePendingSwap(email, name, date, jobType, location) {
         showMessage('Approving pending swap for marketplace...', 'info');
         callBackend('approvePendingSwap', {
-            staffEmail: email,
-            staffName: name,
-            date, jobType, location
+            staffEmail: email, staffName: name, date, jobType, location
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
-            else { 
-                showMessage('✓ Swap approved and moved to marketplace', 'success'); 
-                loadPendingSwaps();
-            }
+            else { showMessage('✓ Swap approved and moved to marketplace', 'success'); loadPendingSwaps(); }
         });
     }
 
@@ -573,30 +576,23 @@
 
     function submitDenySwap() {
         if (!pendingDenySwap) return;
-        
         const reason = document.getElementById('denyReason').value.trim();
-        if (!reason) {
-            showMessage('Please provide a reason', 'error');
-            return;
-        }
+        if (!reason) { showMessage('Please provide a reason', 'error'); return; }
 
         showMessage('Denying swap...', 'info');
         callBackend('denySwapWithReason', {
-            staffEmail: pendingDenySwap.email,
-            staffName: pendingDenySwap.name,
-            date: pendingDenySwap.date,
-            jobType: pendingDenySwap.jobType,
-            location: pendingDenySwap.location,
-            reason: reason
+            staffEmail: pendingDenySwap.email, staffName: pendingDenySwap.name,
+            date: pendingDenySwap.date, jobType: pendingDenySwap.jobType,
+            location: pendingDenySwap.location, reason
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
-            else {
-                showMessage('✓ Swap denied and email sent', 'success');
-                closeDenyModal();
-                loadPendingSwaps();
-            }
+            else { showMessage('✓ Swap denied and email sent', 'success'); closeDenyModal(); loadPendingSwaps(); }
         });
     }
+
+    // ============================================================
+    // SHIFTS (STAFF)
+    // ============================================================
 
     function loadStaffShifts() {
         showMessage('Loading shifts...', 'info');
@@ -621,16 +617,12 @@
                 </div>
             </div>`;
         });
-        
         container.innerHTML = html;
     }
 
     function requestShifts() {
         const checkboxes = document.querySelectorAll('.shift-checkbox:checked');
-        if (checkboxes.length === 0) {
-            showMessage('Please select at least one shift', 'error');
-            return;
-        }
+        if (checkboxes.length === 0) { showMessage('Please select at least one shift', 'error'); return; }
 
         showMessage('Sending shift requests...', 'info');
         callBackend('requestShifts', {
@@ -645,12 +637,13 @@
             })
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
-            else {
-                showMessage('✓ Shift requests sent!', 'success');
-                Array.from(checkboxes).forEach(cb => cb.checked = false);
-            }
+            else { showMessage('✓ Shift requests sent!', 'success'); Array.from(checkboxes).forEach(cb => cb.checked = false); }
         });
     }
+
+    // ============================================================
+    // SWAPS (STAFF)
+    // ============================================================
 
     function loadCurrentSwaps() {
         callBackend('getMarketplaceListings', {email: currentUser.email}).then(swaps => {
@@ -687,7 +680,7 @@
         const location = document.getElementById('swapLocation').value;
         const jobTypeSelect = document.getElementById('swapJobType');
         const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
-        
+
         jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
         jobTypes.forEach(jt => {
             const opt = document.createElement('option');
@@ -714,27 +707,23 @@
 
     function renderFortnightGrid(dateStr) {
         const container = document.getElementById('fortnightGrid');
-        
         const [year, month, day] = dateStr.split('-');
         const shiftDate = new Date(year, parseInt(month) - 1, parseInt(day));
-        
         const fortnightStart = new Date(shiftDate);
         const dayOfWeek = fortnightStart.getDay();
         const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
         fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
 
         let html = '<div class="fortnight-grid">';
-        
         const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         for (let i = 0; i < 14; i++) {
             const d = new Date(fortnightStart);
             d.setDate(d.getDate() + i);
-            const dayName = dayNames[i % 7];
-            const dateNum = d.getDate();
-            html += `<div class="fortnight-day">${dayName}<br>${dateNum}</div>`;
+            html += `<div class="fortnight-day">${dayNames[i % 7]}<br>${d.getDate()}</div>`;
         }
+        html += '</div>';
 
-        html += '</div><div style="margin-top: 20px;"><h4>Day Shifts</h4><div class="fortnight-grid">';
+        html += '<div style="margin-top: 20px;"><h4>Day Shifts</h4><div class="fortnight-grid">';
         for (let i = 0; i < 14; i++) {
             html += `<div class="fortnight-checkbox"><input type="checkbox" class="fortnight-day-checkbox" value="${i}"><label style="margin-bottom: 0; font-size: 11px;">Day</label></div>`;
         }
@@ -754,10 +743,7 @@
         const nightChecks = Array.from(document.querySelectorAll('.fortnight-night-checkbox:checked')).map(cb => `Night-${cb.value}`);
         const selectedDays = [...dayChecks, ...nightChecks];
 
-        if (selectedDays.length === 0) {
-            showMessage('Please select at least one day', 'error');
-            return;
-        }
+        if (selectedDays.length === 0) { showMessage('Please select at least one day', 'error'); return; }
 
         showMessage('Submitting swap request (pending officer approval)...', 'info');
         callBackend('listShiftForSwap', {
@@ -787,6 +773,10 @@
         pendingFortnightSwap = null;
     }
 
+    // ============================================================
+    // SETTINGS (STAFF)
+    // ============================================================
+
     function loadLocationCheckboxes() {
         const container = document.getElementById('locationList');
         let html = '';
@@ -797,37 +787,69 @@
         container.innerHTML = html;
     }
 
+    function loadASTCheckboxes() {
+        const container = document.getElementById('astList');
+        let html = '';
+        // Emergency is always held — show as fixed, non-interactive
+        html += `<div class="location-item">
+            <input type="checkbox" checked disabled style="opacity: 0.5; width: 18px; height: 18px;">
+            <label style="color: #666;">Emergency <span style="font-size: 12px; color: #999;">(always held)</span></label>
+        </div>`;
+        AST_QUALS.forEach(qual => {
+            const checked = userQuals.includes(qual) ? ' checked' : '';
+            html += `<div class="location-item"><input type="checkbox" id="ast-${qual}" value="${qual}"${checked}><label for="ast-${qual}">${qual}</label></div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    // Fix: saves both locations AND AST quals to backend (V1 only saved locations)
     function saveSettings() {
-        const checkboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
-        const newLocations = Array.from(checkboxes).map(cb => cb.value);
-        
+        const locCheckboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
+        const astCheckboxes = document.querySelectorAll('#astList input[type="checkbox"]:checked:not([disabled])');
+
+        const newLocations = Array.from(locCheckboxes).map(cb => cb.value);
+        const additionalQuals = Array.from(astCheckboxes).map(cb => cb.value);
+        const newQuals = ['Emergency', ...additionalQuals];
+
         if (newLocations.length === 0) {
             showMessage('Please select at least one location', 'error');
             return;
         }
-        
+
         showMessage('Saving settings...', 'info');
-        callBackend('updateUserLocations', {
-            email: currentUser.email,
-            locations: newLocations.join(', '),
-            role: userRole
-        }).then(result => {
-            if (result.error) {
-                showMessage('Error: ' + result.error, 'error');
+
+        // Save locations and AST quals in parallel
+        Promise.all([
+            callBackend('updateUserLocations', {
+                email: currentUser.email,
+                locations: newLocations.join(', '),
+                role: userRole
+            }),
+            callBackend('updateUserAST', {
+                email: currentUser.email,
+                astQuals: newQuals.join(', ')
+            })
+        ]).then(([locResult, astResult]) => {
+            if (locResult.error) {
+                showMessage('Error saving locations: ' + locResult.error, 'error');
+            } else if (astResult.error) {
+                showMessage('Error saving AST qualifications: ' + astResult.error, 'error');
             } else {
                 userLocations = newLocations;
+                userQuals = newQuals;
                 showMessage('✓ Settings saved', 'success');
                 populateSwapLocations();
             }
         });
     }
 
+    // ============================================================
+    // UTILITIES
+    // ============================================================
+
     function showMessage(text, type) {
         const container = document.getElementById('messageContainer');
-        if (!text) {
-            container.innerHTML = '';
-            return;
-        }
+        if (!text) { container.innerHTML = ''; return; }
         const messageEl = document.createElement('div');
         messageEl.className = 'message ' + type;
         messageEl.textContent = text;
@@ -837,6 +859,10 @@
     }
 
     function logout() {
+        currentUser = null;
+        userRole = null;
+        userLocations = [];
+        userQuals = ['Emergency'];
         document.getElementById('mainDashboard').style.display = 'none';
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('emailInput').value = '';
