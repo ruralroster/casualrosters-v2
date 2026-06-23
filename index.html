@@ -1041,9 +1041,18 @@
     // Parses availableDays string into array of {date, type, display} objects for modal radio buttons
     function parseAvailableDaysForModal(shiftDateStr, availableDaysStr) {
         if (!availableDaysStr) return [];
-        const parts = shiftDateStr.split('/');
-        if (parts.length !== 3) return [];
-        const shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        let shiftDate;
+        if (shiftDateStr.includes('/')) {
+            const parts = shiftDateStr.split('/');
+            if (parts.length !== 3) return [];
+            shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else if (shiftDateStr.includes('-')) {
+            const parts = shiftDateStr.split('-');
+            if (parts.length !== 3) return [];
+            shiftDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+            return [];
+        }
         const fortnightStart = new Date(shiftDate);
         const dayOfWeek = fortnightStart.getDay();
         const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
@@ -1177,11 +1186,21 @@
 
     // Converts stored fortnight index format (e.g. "Day-0,Night-3") to readable dates
     // anchored from the Monday of the swap shift's week (e.g. "12/06/26 Day, 15/06/26 Night")
+    // Handles both DD/MM/YYYY (vacancy format) and YYYY-MM-DD (HTML date input / Marketplace Listings)
     function formatAvailableDays(shiftDateStr, availableDaysStr) {
         if (!availableDaysStr) return '';
-        const parts = shiftDateStr.split('/');
-        if (parts.length !== 3) return availableDaysStr;
-        const shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        let shiftDate;
+        if (shiftDateStr.includes('/')) {
+            const parts = shiftDateStr.split('/');
+            if (parts.length !== 3) return availableDaysStr;
+            shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else if (shiftDateStr.includes('-')) {
+            const parts = shiftDateStr.split('-');
+            if (parts.length !== 3) return availableDaysStr;
+            shiftDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+            return availableDaysStr;
+        }
         const fortnightStart = new Date(shiftDate);
         const dayOfWeek = fortnightStart.getDay();
         const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
