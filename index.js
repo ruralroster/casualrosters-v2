@@ -95,6 +95,10 @@ const server = http.createServer((req, res) => {
         case 'denySwap':                  result = await denySwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.sendEmail !== false); break;
         case 'approvePendingSwap':        result = await approvePendingSwap(params.staffEmail, params.staffName, params.date, params.jobType, params.location); break;
         case 'denySwapWithReason':        result = await denySwapWithReason(params.staffEmail, params.staffName, params.date, params.jobType, params.location, params.reason); break;
+        case 'getOfficerApprovedListings':  result = await getOfficerApprovedListings(params.email); break;
+        case 'getOfficerSwapProposals':     result = await getOfficerSwapProposals(params.email); break;
+        case 'removeFromMarketplace':       result = await removeFromMarketplace(params.staffEmail, params.staffName, params.date, params.jobType, params.location); break;
+        case 'denySwapProposalWithReason':  result = await denySwapProposalWithReason(params.claimingEmail, params.claimingName, params.date, params.jobType, params.location, params.reason); break;
         case 'approveShiftRequest':       result = await approveShiftRequest(params.email, params.name, params.date, params.jobType, params.location, params.sendEmail !== false); break;
         case 'denyShiftRequest':          result = await denyShiftRequest(params.email, params.name, params.date, params.jobType, params.location, params.sendEmail !== false); break;
         case 'proposeSwap':               result = await proposeSwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.date, params.jobType, params.location, params.offeredDate, params.offeredJobType); break;
@@ -1062,6 +1066,152 @@ async function denySwapProposal(claimingEmail, claimingName, officerEmail, offic
     return { success: true, message: 'Swap proposal denied and Staff B notified' };
   } catch (err) {
     console.error('denySwapProposal error:', err);
+    return { error: err.toString() };
+  }
+}
+
+
+// ============================================================================
+// SWAPS TAB FUNCTIONS
+// ============================================================================
+
+async function getOfficerApprovedListings(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Marketplace Listings!A2:H'
+    });
+    const rows = result.data.values || [];
+    const listings = [];
+    for (let row of rows) {
+      if (locations.includes(String(row[4]).trim()) && String(row[5]).trim() === 'Available') {
+        listings.push({
+          originalEmail: row[0], originalName: row[1], date: row[2],
+          jobType: row[3], location: row[4],
+          isServiceDisruption: row[6] === 'Y', availableDays: row[7] || ''
+        });
+      }
+    }
+    return listings;
+  } catch (err) {
+    console.error('getOfficerApprovedListings error:', err);
+    return [];
+  }
+}
+
+async function getOfficerSwapProposals(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Marketplace Claims!A2:M'
+    });
+    const rows = result.data.values || [];
+    const proposals = [];
+    for (let row of rows) {
+      const type = String(row[12] || '').trim();
+      const status = String(row[8] || '').trim().toUpperCase();
+      if (
+        type === 'swap_proposal' &&
+        status === 'PENDING' &&
+        row[6] && locations.includes(String(row[6]).trim())
+      ) {
+        proposals.push({
+          claimingEmail: row[0], claimingName: row[1],
+          originalEmail: row[2], originalName: row[3],
+          date: row[4], jobType: row[5], location: row[6],
+          timestamp: row[7],
+          offeredDate: row[10] || '', offeredJobType: row[11] || ''
+        });
+      }
+    }
+    return proposals;
+  } catch (err) {
+    console.error('getOfficerSwapProposals error:', err);
+    return [];
+  }
+}
+
+// Pulls an approved listing back to Pending Verification and emails the staff member
+async function removeFromMarketplace(staffEmail, staffName, date, jobType, location) {
+  try {
+    const listingsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Marketplace Listings!A2:H'
+    });
+    const listingsRows = listingsResponse.data.values || [];
+    for (let i = 0; i < listingsRows.length; i++) {
+      if (
+        listingsRows[i][0] === staffEmail &&
+        listingsRows[i][2] === date &&
+        listingsRows[i][3] === jobType &&
+        listingsRows[i][4] === location &&
+        String(listingsRows[i][5]).trim() === 'Available'
+      ) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Marketplace Listings!F${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [['Pending Verification']] }
+        });
+        break;
+      }
+    }
+    await transporter.sendMail({
+      from: GMAIL_USER, to: staffEmail, cc: 'ruralroster@gmail.com',
+      subject: `[Rural Rosters] Your Shift Removed from Marketplace`,
+      html: `<p>Dear ${staffName},</p>
+<p>Your shift listed for swap has been removed from the marketplace by your rostering officer:</p>
+<p><strong>${date} - ${jobType} @ ${location}</strong></p>
+<p>Please contact your rostering officer directly for further details.</p>
+<p>Thank you,<br>Rural Rosters Support</p>`
+    });
+    return { success: true, message: 'Listing pulled back and staff notified' };
+  } catch (err) {
+    console.error('removeFromMarketplace error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function denySwapProposalWithReason(claimingEmail, claimingName, date, jobType, location, reason) {
+  try {
+    const resolvedTimestamp = new Date().toLocaleString();
+    const claimsResult = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Marketplace Claims!A2:M'
+    });
+    const claimRows = claimsResult.data.values || [];
+    for (let i = 0; i < claimRows.length; i++) {
+      if (
+        claimRows[i][0] === claimingEmail &&
+        String(claimRows[i][4]).trim() === date &&
+        String(claimRows[i][5]).trim() === jobType &&
+        String(claimRows[i][6]).trim() === location &&
+        String(claimRows[i][12] || '').trim() === 'swap_proposal' &&
+        String(claimRows[i][8]).trim() === 'Pending'
+      ) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Marketplace Claims!I${i + 2}:J${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [['Denied', resolvedTimestamp]] }
+        });
+        break;
+      }
+    }
+    await transporter.sendMail({
+      from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
+      subject: `[Rural Rosters] Your Swap Proposal Not Approved`,
+      html: `<p>Dear ${claimingName},</p>
+<p>Your proposed shift swap for <strong>${date} - ${jobType} @ ${location}</strong> has not been approved.</p>
+<p><strong>Reason:</strong> ${reason}</p>
+<p>Please contact your rostering officer if you have any questions.</p>
+<p>Thank you,<br>Rural Rosters Support</p>`
+    });
+    return { success: true, message: 'Swap proposal denied and staff notified' };
+  } catch (err) {
+    console.error('denySwapProposalWithReason error:', err);
     return { error: err.toString() };
   }
 }
