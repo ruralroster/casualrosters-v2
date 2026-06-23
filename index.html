@@ -480,12 +480,17 @@
                         ? `<br><span style="color: #666; font-size: 12px;">Offers in return: <strong>${claim.offeredDate} - ${claim.offeredJobType} @ ${claim.location}</strong></span>`
                         : '';
 
+                    // Route approve/deny to correct backend action based on claim type
                     const approveBtn = isProposal
                         ? `<button class="btn-success" onclick="approveSwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${claim.offeredDate || ''}', '${claim.offeredJobType || ''}')">Approve</button>`
+                        : claim.type === 'shift_request'
+                        ? `<button class="btn-success" onclick="approveShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>`
                         : `<button class="btn-success" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>`;
 
                     const denyBtn = isProposal
                         ? `<button class="btn-danger" onclick="denySwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`
+                        : claim.type === 'shift_request'
+                        ? `<button class="btn-danger" onclick="denyShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`
                         : `<button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`;
 
                     html += `<div class="applicant-row">
@@ -540,7 +545,27 @@
         });
     }
 
-    function denySwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
+    function approveShiftRequestCall(email, name, date, jobType, location) {
+        showMessage('Approving shift request...', 'info');
+        callBackend('approveShiftRequest', {
+            email, name, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Shift request approved', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+    function denyShiftRequestCall(email, name, date, jobType, location) {
+        showMessage('Denying shift request...', 'info');
+        callBackend('denyShiftRequest', {
+            email, name, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Shift request denied', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+        function denySwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
         showMessage('Denying...', 'info');
         callBackend('denySwap', {
             claimingEmail, claimingName, originalEmail, originalName,
