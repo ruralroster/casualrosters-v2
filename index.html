@@ -467,6 +467,7 @@
                         <strong>${first.date} - ${first.jobType} @ ${first.location}</strong>
                     </div>`;
 
+                let claimIdx = 0;
                 claimList.forEach((claim) => {
                     const isProposal = claim.type === 'swap_proposal';
                     const isSwap = claim.type === 'swap_claim';
@@ -482,28 +483,36 @@
 
                     // Route approve/deny to correct backend action based on claim type
                     const approveBtn = isProposal
-                        ? `<button class="btn-success" onclick="approveSwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${claim.offeredDate || ''}', '${claim.offeredJobType || ''}')">Approve</button>`
+                        ? `<button class="btn-success" onclick="approveSwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${claim.offeredDate || ''}', '${claim.offeredJobType || ''}', '${notifyId}')">Approve</button>`
                         : claim.type === 'shift_request'
-                        ? `<button class="btn-success" onclick="approveShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>`
-                        : `<button class="btn-success" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>`;
+                        ? `<button class="btn-success" onclick="approveShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Approve</button>`
+                        : `<button class="btn-success" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Approve</button>`;
 
                     const denyBtn = isProposal
-                        ? `<button class="btn-danger" onclick="denySwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`
+                        ? `<button class="btn-danger" onclick="denySwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`
                         : claim.type === 'shift_request'
-                        ? `<button class="btn-danger" onclick="denyShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`
-                        : `<button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`;
+                        ? `<button class="btn-danger" onclick="denyShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`
+                        : `<button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`;
 
+                    const notifyId = `notify-${key.replace(/[|@. ]/g, '-')}-${claimIdx}`;
                     html += `<div class="applicant-row">
                         <div class="applicant-info">
                             <strong>${claim.claimingName}</strong> ${typeBadge}<br>
                             <span style="color: #666; font-size: 12px;">Submitted: ${claim.claimedTimestamp}</span>
                             ${proposalDetail}
                         </div>
-                        <div class="applicant-buttons">
-                            ${approveBtn}
-                            ${denyBtn}
+                        <div class="applicant-buttons" style="flex-direction: column; align-items: flex-end; gap: 8px;">
+                            <label style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="${notifyId}" checked style="width: 14px; height: 14px;">
+                                Send notification to staff
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                ${approveBtn}
+                                ${denyBtn}
+                            </div>
                         </div>
                     </div>`;
+                    claimIdx++;
                 });
                 html += '</div>';
             }
@@ -533,44 +542,48 @@
         container.innerHTML = html;
     }
 
-    function approveSwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
+    function approveSwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
         showMessage('Approving...', 'info');
         callBackend('approveSwap', {
             claimingEmail, claimingName, originalEmail, originalName,
             officerEmail: currentUser.email, officerName: currentUser.name,
-            date, jobType, location
+            date, jobType, location, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Approved and auto-denied other applicants', 'success'); loadOfficerApprovals(); }
         });
     }
 
-    function approveShiftRequestCall(email, name, date, jobType, location) {
+    function approveShiftRequestCall(email, name, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
         showMessage('Approving shift request...', 'info');
         callBackend('approveShiftRequest', {
-            email, name, date, jobType, location
+            email, name, date, jobType, location, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Shift request approved', 'success'); loadOfficerApprovals(); }
         });
     }
 
-    function denyShiftRequestCall(email, name, date, jobType, location) {
+    function denyShiftRequestCall(email, name, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
         showMessage('Denying shift request...', 'info');
         callBackend('denyShiftRequest', {
-            email, name, date, jobType, location
+            email, name, date, jobType, location, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Shift request denied', 'success'); loadOfficerApprovals(); }
         });
     }
 
-        function denySwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
+        function denySwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
         showMessage('Denying...', 'info');
         callBackend('denySwap', {
             claimingEmail, claimingName, originalEmail, originalName,
             officerEmail: currentUser.email, officerName: currentUser.name,
-            date, jobType, location
+            date, jobType, location, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Denied', 'success'); loadOfficerApprovals(); }
@@ -1041,24 +1054,26 @@
         });
     }
 
-    function approveSwapProposalCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, offeredDate, offeredJobType) {
+    function approveSwapProposalCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, offeredDate, offeredJobType, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
         showMessage('Approving swap proposal...', 'info');
         callBackend('approveSwapProposal', {
             claimingEmail, claimingName, originalEmail, originalName,
             officerEmail: currentUser.email, officerName: currentUser.name,
-            date, jobType, location, offeredDate, offeredJobType
+            date, jobType, location, offeredDate, offeredJobType, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Swap proposal approved — both parties notified', 'success'); loadOfficerApprovals(); }
         });
     }
 
-    function denySwapProposalCall(claimingEmail, claimingName, date, jobType, location) {
+    function denySwapProposalCall(claimingEmail, claimingName, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
         showMessage('Denying swap proposal...', 'info');
         callBackend('denySwapProposal', {
             claimingEmail, claimingName,
             officerEmail: currentUser.email, officerName: currentUser.name,
-            date, jobType, location
+            date, jobType, location, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('✓ Swap proposal denied', 'success'); loadOfficerApprovals(); }
