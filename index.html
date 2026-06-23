@@ -169,6 +169,7 @@
     let pendingDenySwap = null;
     let pendingFortnightSwap = null;
     let pendingProposal = null;
+    let pendingDenyProposal = null;
 
     async function callBackend(action, params) {
         try {
@@ -237,7 +238,7 @@
             tabsContainer.innerHTML = `
                 <button class="tab-button active" onclick="switchTab(0, this)">My Vacancies</button>
                 <button class="tab-button" onclick="switchTab(1, this)">Shift Cover Approvals</button>
-                <button class="tab-button" onclick="switchTab(2, this)">Pending Swaps</button>
+                <button class="tab-button" onclick="switchTab(2, this)">Swaps</button>
             `;
             tabsContent.innerHTML = `
                 <div id="tab-0" class="tab-content active">
@@ -595,37 +596,112 @@
     // ============================================================
 
     function loadPendingSwaps() {
-        showMessage('Loading pending swaps...', 'info');
-        callBackend('getOfficerMarketplaceListings', {email: currentUser.email}).then(listings => {
-            renderPendingSwaps(listings || []);
+        showMessage('Loading swaps...', 'info');
+        Promise.all([
+            callBackend('getOfficerMarketplaceListings', {email: currentUser.email}),
+            callBackend('getOfficerApprovedListings', {email: currentUser.email}),
+            callBackend('getOfficerSwapProposals', {email: currentUser.email})
+        ]).then(([pending, approved, proposals]) => {
+            renderSwapsTab(pending || [], approved || [], proposals || []);
         });
     }
 
-    function renderPendingSwaps(listings) {
+    function renderSwapsTab(pending, approved, proposals) {
         const container = document.getElementById('swapsContainer');
+        let html = '';
 
-        if (!listings || listings.length === 0) {
-            container.innerHTML = '<p style="color: #999;">No pending swaps</p>';
-            return;
+        // ── Section 1: Pending Swaps ──────────────────────────────
+        html += '<h4 style="margin-bottom: 12px;">Pending Swaps</h4>';
+        if (!pending || pending.length === 0) {
+            html += '<p style="color: #999; margin-bottom: 24px;">No shifts awaiting marketplace approval</p>';
+        } else {
+            pending.forEach(listing => {
+                const color = listing.isServiceDisruption ? '#ffe6e6' : '#f9f9f9';
+                const borderColor = listing.isServiceDisruption ? '#dc3545' : '#000';
+                html += `<div style="background: ${color}; border-left: 4px solid ${borderColor}; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <strong>${listing.date} - ${listing.jobType} @ ${listing.location}</strong>
+                        ${listing.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold; font-size: 12px;">SERVICE-DISRUPTION</span>' : ''}
+                    </div>
+                    <div style="color: #666; font-size: 13px; margin-bottom: 10px;">Offered by: ${listing.originalName}</div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approvePendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Approve to Marketplace</button>
+                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openDenySwapModal('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Deny</button>
+                    </div>
+                </div>`;
+            });
         }
 
-        let html = '';
-        listings.forEach(listing => {
-            const color = listing.isServiceDisruption ? '#ffe6e6' : '#f9f9f9';
-            const borderColor = listing.isServiceDisruption ? '#dc3545' : '#000';
-            html += `<div style="background: ${color}; border-left: 4px solid ${borderColor}; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                    <strong>${listing.date} - ${listing.jobType} @ ${listing.location}</strong>
-                    ${listing.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold;">SERVICE-DISRUPTION</span>' : ''}
-                </div>
-                <div style="color: #666; font-size: 13px; margin-bottom: 10px;">Offered by: ${listing.originalName}</div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approvePendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Approve to Marketplace</button>
-                    <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openDenySwapModal('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Deny</button>
-                </div>
-            </div>`;
-        });
+        // ── Section 2: Approved to Marketplace ───────────────────
+        html += '<h4 style="margin-top: 28px; margin-bottom: 12px;">Approved to Marketplace</h4>';
+        if (!approved || approved.length === 0) {
+            html += '<p style="color: #999; margin-bottom: 24px;">No shifts currently live on the marketplace</p>';
+        } else {
+            approved.forEach(listing => {
+                const availableDaysText = listing.availableDays
+                    ? `<div style="color: #666; font-size: 12px; margin-top: 4px;"><strong>Can work:</strong> ${formatAvailableDays(listing.date, listing.availableDays)}</div>`
+                    : '';
+                const color = listing.isServiceDisruption ? '#ffe6e6' : '#f9f9f9';
+                const borderColor = listing.isServiceDisruption ? '#dc3545' : '#28a745';
+                html += `<div style="background: ${color}; border-left: 4px solid ${borderColor}; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                                <strong>${listing.date} - ${listing.jobType} @ ${listing.location}</strong>
+                                ${listing.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold; font-size: 12px;">SERVICE-DISRUPTION</span>' : ''}
+                            </div>
+                            <div style="color: #666; font-size: 13px;">Offered by: ${listing.originalName}</div>
+                            ${availableDaysText}
+                        </div>
+                        <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px; white-space: nowrap; margin-left: 15px;" onclick="pullBackFromMarketplace('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Pull Back</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // ── Section 3: Swap Proposals ─────────────────────────────
+        html += '<h4 style="margin-top: 28px; margin-bottom: 12px;">Swap Proposals</h4>';
+        if (!proposals || proposals.length === 0) {
+            html += '<p style="color: #999;">No pending swap proposals</p>';
+        } else {
+            proposals.forEach(proposal => {
+                html += `<div style="background: #fff8e1; border-left: 4px solid #f9a825; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
+                    <div style="margin-bottom: 8px;">
+                        <strong>${proposal.claimingName}</strong> proposes to take:
+                        <strong> ${proposal.date} - ${proposal.jobType} @ ${proposal.location}</strong>
+                        <span style="color: #666; font-size: 13px;"> (from ${proposal.originalName})</span>
+                    </div>
+                    <div style="color: #555; font-size: 13px; margin-bottom: 10px;">
+                        In return, <strong>${proposal.originalName}</strong> would work:
+                        <strong>${proposal.offeredDate} - ${proposal.offeredJobType} @ ${proposal.location}</strong>
+                    </div>
+                    <div style="color: #999; font-size: 12px; margin-bottom: 10px;">Submitted: ${proposal.timestamp}</div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approveSwapProposalCall('${proposal.claimingEmail}', '${proposal.claimingName}', '${proposal.originalEmail}', '${proposal.originalName}', '${proposal.date}', '${proposal.jobType}', '${proposal.location}', '${proposal.offeredDate}', '${proposal.offeredJobType}')">Approve</button>
+                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openDenyProposalModal('${proposal.claimingEmail}', '${proposal.claimingName}', '${proposal.date}', '${proposal.jobType}', '${proposal.location}')">Deny</button>
+                    </div>
+                </div>`;
+            });
+        }
+
         container.innerHTML = html;
+    }
+
+    function pullBackFromMarketplace(email, name, date, jobType, location) {
+        showMessage('Pulling back from marketplace...', 'info');
+        callBackend('removeFromMarketplace', {
+            staffEmail: email, staffName: name, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Listing pulled back and staff notified', 'success'); loadPendingSwaps(); }
+        });
+    }
+
+    function openDenyProposalModal(claimingEmail, claimingName, date, jobType, location) {
+        pendingDenyProposal = { claimingEmail, claimingName, date, jobType, location };
+        pendingDenySwap = null;
+        document.getElementById('denySwapModal').classList.add('active');
+        document.getElementById('denyReason').value = '';
     }
 
     function approvePendingSwap(email, name, date, jobType, location) {
@@ -647,13 +723,32 @@
     function closeDenyModal() {
         document.getElementById('denySwapModal').classList.remove('active');
         pendingDenySwap = null;
+        pendingDenyProposal = null;
     }
 
     function submitDenySwap() {
-        if (!pendingDenySwap) return;
         const reason = document.getElementById('denyReason').value.trim();
         if (!reason) { showMessage('Please provide a reason', 'error'); return; }
 
+        // Proposal denial
+        if (pendingDenyProposal) {
+            showMessage('Denying swap proposal...', 'info');
+            callBackend('denySwapProposalWithReason', {
+                claimingEmail: pendingDenyProposal.claimingEmail,
+                claimingName: pendingDenyProposal.claimingName,
+                date: pendingDenyProposal.date,
+                jobType: pendingDenyProposal.jobType,
+                location: pendingDenyProposal.location,
+                reason
+            }).then(result => {
+                if (result.error) showMessage(result.error, 'error');
+                else { showMessage('✓ Proposal denied and email sent', 'success'); closeDenyModal(); loadPendingSwaps(); }
+            });
+            return;
+        }
+
+        // Listing denial
+        if (!pendingDenySwap) return;
         showMessage('Denying swap...', 'info');
         callBackend('denySwapWithReason', {
             staffEmail: pendingDenySwap.email, staffName: pendingDenySwap.name,
