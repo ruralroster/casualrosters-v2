@@ -463,7 +463,7 @@ async function approveShiftRequest(email, name, date, jobType, location) {
       }
     }
     await transporter.sendMail({
-      from: GMAIL_USER, to: email,
+      from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
       subject: `[Rural Rosters] Your Shift Request Approved`,
       html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
     });
@@ -493,7 +493,7 @@ async function denyShiftRequest(email, name, date, jobType, location) {
       }
     }
     await transporter.sendMail({
-      from: GMAIL_USER, to: email,
+      from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
       subject: `[Rural Rosters] Your Shift Request Denied`,
       html: `<p>Dear ${name},</p><p>Your shift request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
     });
@@ -745,7 +745,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
 
     if (!isSwap && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
-        from: GMAIL_USER, to: claimingEmail,
+        from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Shift Request Approved`,
         html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
       });
@@ -754,14 +754,14 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
     if (isSwap) {
       if (claimingEmail && claimingEmail.trim()) {
         await transporter.sendMail({
-          from: GMAIL_USER, to: claimingEmail,
+          from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
           subject: `[Rural Rosters] Shift Swap Approved`,
           html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Original staff member: ${originalName}</p><p>Please coordinate with ${originalName} to confirm the handover.</p><p>Thank you,<br>Rural Rosters Support</p>`
         });
       }
       if (originalEmail && originalEmail.trim()) {
         await transporter.sendMail({
-          from: GMAIL_USER, to: originalEmail,
+          from: GMAIL_USER, to: originalEmail, cc: 'ruralroster@gmail.com',
           subject: `[Rural Rosters] Your Shift Swap Approved`,
           html: `<p>Dear ${originalName},</p><p>Your shift swap request has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Staff member taking your shift: ${claimingName}</p><p>Thank you,<br>Rural Rosters Support</p>`
         });
@@ -769,7 +769,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       for (let applicant of otherApplicants) {
         if (applicant.email && applicant.email.trim()) {
           await transporter.sendMail({
-            from: GMAIL_USER, to: applicant.email,
+            from: GMAIL_USER, to: applicant.email, cc: 'ruralroster@gmail.com',
             subject: `[Rural Rosters] Shift Swap - Another Applicant Approved`,
             html: `<p>Dear ${applicant.name},</p><p>Unfortunately, another applicant was approved for the following shift:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please try again for future shifts.</p><p>Thank you,<br>Rural Rosters Support</p>`
           });
@@ -808,7 +808,7 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
 
     if (claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
-        from: GMAIL_USER, to: claimingEmail,
+        from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: isSwap ? `[Rural Rosters] Shift Swap Not Approved` : `[Rural Rosters] Your Shift Request Denied`,
         html: isSwap
           ? `<p>Dear ${claimingName},</p><p>Unfortunately, your request to cover the shift has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
@@ -844,7 +844,7 @@ async function approvePendingSwap(staffEmail, staffName, date, jobType, location
       }
     }
     await transporter.sendMail({
-      from: GMAIL_USER, to: staffEmail,
+      from: GMAIL_USER, to: staffEmail, cc: 'ruralroster@gmail.com',
       subject: `[Rural Rosters] Your Swap Approved`,
       html: `<p>Dear ${staffName},</p><p>Your swap request has been approved and is now live on the marketplace!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Available days/shifts: ${availableDays}</p><p>Thank you,<br>Rural Rosters Support</p>`
     });
@@ -979,7 +979,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
     // Email Staff B (claimingEmail) — taking Staff A's shift
     if (claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
-        from: GMAIL_USER, to: claimingEmail,
+        from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Swap Proposal Approved`,
         html: `<p>Dear ${claimingName},</p>
 <p>Your shift swap proposal has been <strong>APPROVED</strong>.</p>
@@ -995,7 +995,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
     // Email Staff A (originalEmail) — taking Staff B's offered shift
     if (originalEmail && originalEmail.trim()) {
       await transporter.sendMail({
-        from: GMAIL_USER, to: originalEmail,
+        from: GMAIL_USER, to: originalEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Shift Swap Approved`,
         html: `<p>Dear ${originalName},</p>
 <p>A shift swap involving your roster has been <strong>APPROVED</strong>.</p>
@@ -1046,7 +1046,7 @@ async function denySwapProposal(claimingEmail, claimingName, officerEmail, offic
     // Email Staff B only — generic message, officer handles any further discussion
     if (claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
-        from: GMAIL_USER, to: claimingEmail,
+        from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Swap Proposal Not Approved`,
         html: `<p>Dear ${claimingName},</p>
 <p>Your proposed shift swap for <strong>${date} - ${jobType} @ ${location}</strong> has not been approved by your rostering officer.</p>
