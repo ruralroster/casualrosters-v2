@@ -91,15 +91,15 @@ const server = http.createServer((req, res) => {
         case 'getOfficerMarketplaceListings': result = await getOfficerMarketplaceListings(params.email); break;
         case 'getOfficerPendingApprovals':    result = await getOfficerPendingApprovals(params.email); break;
         case 'getOfficerPastApprovals':       result = await getOfficerPastApprovals(params.email); break;
-        case 'approveSwap':               result = await approveSwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location); break;
-        case 'denySwap':                  result = await denySwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location); break;
+        case 'approveSwap':               result = await approveSwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.sendEmail !== false); break;
+        case 'denySwap':                  result = await denySwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.sendEmail !== false); break;
         case 'approvePendingSwap':        result = await approvePendingSwap(params.staffEmail, params.staffName, params.date, params.jobType, params.location); break;
         case 'denySwapWithReason':        result = await denySwapWithReason(params.staffEmail, params.staffName, params.date, params.jobType, params.location, params.reason); break;
-        case 'approveShiftRequest':       result = await approveShiftRequest(params.email, params.name, params.date, params.jobType, params.location); break;
-        case 'denyShiftRequest':          result = await denyShiftRequest(params.email, params.name, params.date, params.jobType, params.location); break;
+        case 'approveShiftRequest':       result = await approveShiftRequest(params.email, params.name, params.date, params.jobType, params.location, params.sendEmail !== false); break;
+        case 'denyShiftRequest':          result = await denyShiftRequest(params.email, params.name, params.date, params.jobType, params.location, params.sendEmail !== false); break;
         case 'proposeSwap':               result = await proposeSwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.date, params.jobType, params.location, params.offeredDate, params.offeredJobType); break;
-        case 'approveSwapProposal':       result = await approveSwapProposal(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.offeredDate, params.offeredJobType); break;
-        case 'denySwapProposal':          result = await denySwapProposal(params.claimingEmail, params.claimingName, params.officerEmail, params.officerName, params.date, params.jobType, params.location); break;
+        case 'approveSwapProposal':       result = await approveSwapProposal(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.offeredDate, params.offeredJobType, params.sendEmail !== false); break;
+        case 'denySwapProposal':          result = await denySwapProposal(params.claimingEmail, params.claimingName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.sendEmail !== false); break;
         case 'updateUserLocations':       result = await updateUserLocations(params.email, params.locations, params.role); break;
         case 'updateUserAST':             result = await updateUserAST(params.email, params.astQuals); break;
         case 'countPendingRequests':      result = await countPendingRequests(params.email); break;
@@ -410,8 +410,8 @@ async function requestShifts(email, name, shifts) {
       const shiftList = locationShifts.map(s => `${s.date} - ${s.jobType} @ ${location}`).join('<br>');
       const shiftListText = locationShifts.map(s => `${s.date} - ${s.jobType} @ ${location}`).join(', ');
 
-      const approveLink = `mailto:ruralroster@gmail.com?subject=APPROVE: ${location} ${shiftListText} - ${name}&body=I approve this shift request for ${name} on ${shiftListText}`;
-      const denyLink = `mailto:ruralroster@gmail.com?subject=DENY: ${location} ${shiftListText} - ${name}&body=I deny this shift request for ${name} on ${shiftListText}. Reason: [Please provide reason]`;
+      const approveLink = `mailto:${email}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Your Shift Request Approved&body=Dear ${name},%0A%0AYour request to cover the following shift(s) has been approved:%0A${shiftListText}%0A%0APlease confirm the details with your rostering officer.%0A%0AThank you,%0ARural Rosters`;
+      const denyLink = `mailto:${email}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Your Shift Request Not Approved&body=Dear ${name},%0A%0AYour request to cover the following shift(s) has not been approved:%0A${shiftListText}%0A%0AReason: [Please provide reason]%0A%0AThank you,%0ARural Rosters`;
 
       const htmlBody = `<p>Dear {OFFICER_NAME},</p>
 <p><strong>${name}</strong> is requesting to cover the following shifts:</p>
@@ -444,7 +444,7 @@ async function requestShifts(email, name, shifts) {
   }
 }
 
-async function approveShiftRequest(email, name, date, jobType, location) {
+async function approveShiftRequest(email, name, date, jobType, location, sendEmail = true) {
   try {
     const requestsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
@@ -462,11 +462,13 @@ async function approveShiftRequest(email, name, date, jobType, location) {
         break;
       }
     }
-    await transporter.sendMail({
-      from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
-      subject: `[Rural Rosters] Your Shift Request Approved`,
-      html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
-    });
+    if (sendEmail) {
+      await transporter.sendMail({
+        from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
+        subject: `[Rural Rosters] Your Shift Request Approved`,
+        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
+      });
+    }
     return { success: true };
   } catch (err) {
     console.error('approveShiftRequest error:', err);
@@ -474,7 +476,7 @@ async function approveShiftRequest(email, name, date, jobType, location) {
   }
 }
 
-async function denyShiftRequest(email, name, date, jobType, location) {
+async function denyShiftRequest(email, name, date, jobType, location, sendEmail = true) {
   try {
     const requestsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
@@ -492,11 +494,13 @@ async function denyShiftRequest(email, name, date, jobType, location) {
         break;
       }
     }
-    await transporter.sendMail({
-      from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
-      subject: `[Rural Rosters] Your Shift Request Denied`,
-      html: `<p>Dear ${name},</p><p>Your shift request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
-    });
+    if (sendEmail) {
+      await transporter.sendMail({
+        from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
+        subject: `[Rural Rosters] Your Shift Request Denied`,
+        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
+      });
+    }
     return { success: true };
   } catch (err) {
     console.error('denyShiftRequest error:', err);
@@ -711,7 +715,7 @@ async function getOfficerPastApprovals(email) {
   }
 }
 
-async function approveSwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location) {
+async function approveSwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location, sendEmail = true) {
   try {
     const resolvedTimestamp = new Date().toLocaleString();
     const claimsResult = await sheets.spreadsheets.values.get({
@@ -743,7 +747,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       }
     }
 
-    if (!isSwap && claimingEmail && claimingEmail.trim()) {
+    if (sendEmail && !isSwap && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
         from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Shift Request Approved`,
@@ -751,7 +755,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       });
     }
 
-    if (isSwap) {
+    if (isSwap && sendEmail) {
       if (claimingEmail && claimingEmail.trim()) {
         await transporter.sendMail({
           from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
@@ -784,7 +788,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
   }
 }
 
-async function denySwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location) {
+async function denySwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location, sendEmail = true) {
   try {
     const resolvedTimestamp = new Date().toLocaleString();
     const claimsResult = await sheets.spreadsheets.values.get({
@@ -806,7 +810,7 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
       }
     }
 
-    if (claimingEmail && claimingEmail.trim()) {
+    if (sendEmail && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
         from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: isSwap ? `[Rural Rosters] Shift Swap Not Approved` : `[Rural Rosters] Your Shift Request Denied`,
@@ -918,8 +922,8 @@ async function proposeSwap(claimingEmail, claimingName, originalEmail, originalN
         const officerEmail = String(row[2]).trim();
         const officerName = String(row[1]).trim();
 
-        const approveLink = `mailto:ruralroster@gmail.com?subject=APPROVE SWAP PROPOSAL: ${claimingName} takes ${date} ${jobType} from ${originalName}&body=I approve this swap proposal.`;
-        const denyLink = `mailto:ruralroster@gmail.com?subject=DENY SWAP PROPOSAL: ${claimingName} takes ${date} ${jobType} from ${originalName}&body=I deny this swap proposal.`;
+        const approveLink = `mailto:${claimingEmail},${originalEmail}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Shift Swap Approved&body=Dear ${claimingName} and ${originalName},%0A%0AYour proposed shift swap has been approved.%0A%0A${claimingName} will cover: ${date} - ${jobType} @ ${location}%0A${originalName} will work: ${offeredDate} - ${offeredJobType} @ ${location}%0A%0APlease coordinate with each other to confirm the handover.%0A%0AThank you,%0ARural Rosters`;
+        const denyLink = `mailto:${claimingEmail}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Swap Proposal Not Approved&body=Dear ${claimingName},%0A%0AYour proposed swap for ${date} - ${jobType} @ ${location} has not been approved.%0A%0APlease contact your rostering officer directly for further details.%0A%0AThank you,%0ARural Rosters`;
 
         await transporter.sendMail({
           from: GMAIL_USER, to: officerEmail, cc: 'ruralroster@gmail.com',
@@ -947,7 +951,7 @@ async function proposeSwap(claimingEmail, claimingName, originalEmail, originalN
   }
 }
 
-async function approveSwapProposal(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location, offeredDate, offeredJobType) {
+async function approveSwapProposal(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location, offeredDate, offeredJobType, sendEmail = true) {
   try {
     const resolvedTimestamp = new Date().toLocaleString();
 
@@ -977,7 +981,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
     }
 
     // Email Staff B (claimingEmail) — taking Staff A's shift
-    if (claimingEmail && claimingEmail.trim()) {
+    if (sendEmail && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
         from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Swap Proposal Approved`,
@@ -993,7 +997,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
     }
 
     // Email Staff A (originalEmail) — taking Staff B's offered shift
-    if (originalEmail && originalEmail.trim()) {
+    if (sendEmail && originalEmail && originalEmail.trim()) {
       await transporter.sendMail({
         from: GMAIL_USER, to: originalEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Shift Swap Approved`,
@@ -1015,7 +1019,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
   }
 }
 
-async function denySwapProposal(claimingEmail, claimingName, officerEmail, officerName, date, jobType, location) {
+async function denySwapProposal(claimingEmail, claimingName, officerEmail, officerName, date, jobType, location, sendEmail = true) {
   try {
     const resolvedTimestamp = new Date().toLocaleString();
 
@@ -1044,7 +1048,7 @@ async function denySwapProposal(claimingEmail, claimingName, officerEmail, offic
     }
 
     // Email Staff B only — generic message, officer handles any further discussion
-    if (claimingEmail && claimingEmail.trim()) {
+    if (sendEmail && claimingEmail && claimingEmail.trim()) {
       await transporter.sendMail({
         from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Swap Proposal Not Approved`,
