@@ -121,6 +121,26 @@
     </div>
 </div>
 
+
+<div id="proposalModal" class="modal">
+    <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <h3>Propose Shift Swap</h3>
+        <div id="proposalShiftDetail" style="background: #f9f9f9; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 14px;"></div>
+        <h4 style="margin-bottom: 10px;">Select which date you can cover:</h4>
+        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">These are the dates the original staff member can work in exchange.</p>
+        <div id="proposalDatesContainer" style="margin-bottom: 20px;"></div>
+        <h4 style="margin-bottom: 10px;">Your shift type to offer in return:</h4>
+        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Location is fixed as the same location. Select the job type of the shift you are giving up.</p>
+        <select id="proposalJobType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 20px;">
+            <option value="">Select Job Type</option>
+        </select>
+        <div class="modal-buttons">
+            <button class="btn-primary" onclick="submitSwapProposal()">Offer to Take Swap</button>
+            <button class="btn-secondary" onclick="closeProposalModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script>
     // UPDATE THIS after first staging deploy — get URL from Cloud Run console
     const BACKEND_URL = 'https://ruralrostersproxy-staging-191282140713.australia-southeast1.run.app';
@@ -148,6 +168,7 @@
     let officerLocations = [];
     let pendingDenySwap = null;
     let pendingFortnightSwap = null;
+    let pendingProposal = null;
 
     async function callBackend(action, params) {
         try {
@@ -447,19 +468,35 @@
                     </div>`;
 
                 claimList.forEach((claim) => {
+                    const isProposal = claim.type === 'swap_proposal';
                     const isSwap = claim.type === 'swap_claim';
-                    const typeBadge = isSwap
+                    const typeBadge = isProposal
+                        ? `<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP PROPOSAL</span>`
+                        : isSwap
                         ? `<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP CLAIM</span>`
                         : `<span style="background: #cfe2ff; color: #084298; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SHIFT REQUEST</span>`;
+
+                    const proposalDetail = isProposal && claim.offeredDate
+                        ? `<br><span style="color: #666; font-size: 12px;">Offers in return: <strong>${claim.offeredDate} - ${claim.offeredJobType} @ ${claim.location}</strong></span>`
+                        : '';
+
+                    const approveBtn = isProposal
+                        ? `<button class="btn-success" onclick="approveSwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${claim.offeredDate || ''}', '${claim.offeredJobType || ''}')">Approve</button>`
+                        : `<button class="btn-success" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>`;
+
+                    const denyBtn = isProposal
+                        ? `<button class="btn-danger" onclick="denySwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`
+                        : `<button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>`;
 
                     html += `<div class="applicant-row">
                         <div class="applicant-info">
                             <strong>${claim.claimingName}</strong> ${typeBadge}<br>
                             <span style="color: #666; font-size: 12px;">Submitted: ${claim.claimedTimestamp}</span>
+                            ${proposalDetail}
                         </div>
                         <div class="applicant-buttons">
-                            <button class="btn-success" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Approve</button>
-                            <button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}')">Deny</button>
+                            ${approveBtn}
+                            ${denyBtn}
                         </div>
                     </div>`;
                 });
@@ -655,9 +692,14 @@
                 swaps.forEach(s => {
                     const availableDaysText = s.availableDays ? `<div style="color: #666; font-size: 12px; margin-top: 5px;"><strong>Can work:</strong> ${formatAvailableDays(s.date, s.availableDays)}</div>` : '';
                     html += `<div class="shift-item">
-                        <div><strong>${s.date} - ${s.jobType} @ ${s.location}</strong></div>
-                        <div style="color: #666; font-size: 13px;">Offered by: ${s.originalName}</div>
-                        ${availableDaysText}
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <div><strong>${s.date} - ${s.jobType} @ ${s.location}</strong></div>
+                                <div style="color: #666; font-size: 13px;">Offered by: ${s.originalName}</div>
+                                ${availableDaysText}
+                            </div>
+                            <button class="btn-primary" style="margin-left: 15px; white-space: nowrap; font-size: 12px; padding: 6px 12px;" onclick='openProposalModal(${JSON.stringify(s)})'>Propose Swap</button>
+                        </div>
                     </div>`;
                 });
                 container.innerHTML = html;
@@ -858,6 +900,145 @@
         if (type !== 'error') setTimeout(() => { if (messageEl.parentNode) messageEl.remove(); }, 3000);
     }
 
+
+    // ============================================================
+    // SWAP PROPOSAL (STAFF)
+    // ============================================================
+
+    // Parses availableDays string into array of {date, type, display} objects for modal radio buttons
+    function parseAvailableDaysForModal(shiftDateStr, availableDaysStr) {
+        if (!availableDaysStr) return [];
+        const parts = shiftDateStr.split('/');
+        if (parts.length !== 3) return [];
+        const shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        const fortnightStart = new Date(shiftDate);
+        const dayOfWeek = fortnightStart.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
+        fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
+
+        return availableDaysStr.split(',').map(entry => {
+            const trimmed = entry.trim();
+            const dashIdx = trimmed.lastIndexOf('-');
+            if (dashIdx === -1) return null;
+            const type = trimmed.substring(0, dashIdx);
+            const idx = parseInt(trimmed.substring(dashIdx + 1));
+            if (isNaN(idx)) return null;
+            const d = new Date(fortnightStart);
+            d.setDate(d.getDate() + idx);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            const dateStr = day + '/' + month + '/' + year;
+            const yearShort = String(year).slice(-2);
+            return {
+                date: dateStr,
+                type: type,
+                display: day + '/' + month + '/' + yearShort + ' ' + type
+            };
+        }).filter(Boolean);
+    }
+
+    function openProposalModal(listing) {
+        pendingProposal = listing;
+
+        // Show shift being taken
+        document.getElementById('proposalShiftDetail').innerHTML =
+            `<strong>Shift you would take:</strong> ${listing.date} - ${listing.jobType} @ ${listing.location}<br>
+             <span style="color: #666;">Currently held by: ${listing.originalName}</span>`;
+
+        // Populate radio buttons for Staff A's can-work dates
+        const dates = parseAvailableDaysForModal(listing.date, listing.availableDays);
+        const datesContainer = document.getElementById('proposalDatesContainer');
+        if (dates.length === 0) {
+            datesContainer.innerHTML = '<p style="color: #999;">No available dates specified.</p>';
+        } else {
+            datesContainer.innerHTML = dates.map((opt, i) =>
+                `<div class="location-item">
+                    <input type="radio" name="proposalDate" id="pd-${i}" value="${opt.date}|${opt.type}" style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="pd-${i}">${opt.display}</label>
+                </div>`
+            ).join('');
+        }
+
+        // Populate job type dropdown for Staff B's offered shift
+        const jobTypes = JOB_TYPES_BY_LOCATION[listing.location] || [];
+        const select = document.getElementById('proposalJobType');
+        select.innerHTML = '<option value="">Select Job Type</option>';
+        jobTypes.forEach(jt => {
+            const opt = document.createElement('option');
+            opt.value = jt;
+            opt.textContent = jt;
+            select.appendChild(opt);
+        });
+
+        document.getElementById('proposalModal').classList.add('active');
+    }
+
+    function closeProposalModal() {
+        document.getElementById('proposalModal').classList.remove('active');
+        pendingProposal = null;
+    }
+
+    function submitSwapProposal() {
+        if (!pendingProposal) return;
+
+        const selectedDate = document.querySelector('input[name="proposalDate"]:checked');
+        const jobType = document.getElementById('proposalJobType').value;
+
+        if (!selectedDate) {
+            showMessage('Please select a date you can cover', 'error');
+            return;
+        }
+        if (!jobType) {
+            showMessage('Please select the job type of the shift you are offering', 'error');
+            return;
+        }
+
+        const [offeredDate, offeredType] = selectedDate.value.split('|');
+
+        showMessage('Submitting swap proposal...', 'info');
+        callBackend('proposeSwap', {
+            claimingEmail: currentUser.email,
+            claimingName: currentUser.name,
+            originalEmail: pendingProposal.originalEmail,
+            originalName: pendingProposal.originalName,
+            date: pendingProposal.date,
+            jobType: pendingProposal.jobType,
+            location: pendingProposal.location,
+            offeredDate: offeredDate,
+            offeredJobType: jobType
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else {
+                showMessage('✓ Swap proposal submitted — your rostering officer has been notified', 'success');
+                closeProposalModal();
+            }
+        });
+    }
+
+    function approveSwapProposalCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, offeredDate, offeredJobType) {
+        showMessage('Approving swap proposal...', 'info');
+        callBackend('approveSwapProposal', {
+            claimingEmail, claimingName, originalEmail, originalName,
+            officerEmail: currentUser.email, officerName: currentUser.name,
+            date, jobType, location, offeredDate, offeredJobType
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Swap proposal approved — both parties notified', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+    function denySwapProposalCall(claimingEmail, claimingName, date, jobType, location) {
+        showMessage('Denying swap proposal...', 'info');
+        callBackend('denySwapProposal', {
+            claimingEmail, claimingName,
+            officerEmail: currentUser.email, officerName: currentUser.name,
+            date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Swap proposal denied', 'success'); loadOfficerApprovals(); }
+        });
+    }
 
     // Converts stored fortnight index format (e.g. "Day-0,Night-3") to readable dates
     // anchored from the Monday of the swap shift's week (e.g. "12/06/26 Day, 15/06/26 Night")
