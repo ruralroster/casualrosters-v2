@@ -67,15 +67,23 @@
         .fortnight-day { text-align: center; font-size: 11px; font-weight: 600; padding: 8px; background: #f0f0f0; border-radius: 3px; }
         .fortnight-checkbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 3px; min-height: 80px; }
         .fortnight-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .pending-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px; color: #856404; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .pending-banner .banner-item { display: flex; align-items: center; gap: 6px; }
+        .pending-banner .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: #f9a825; flex-shrink: 0; }
         .settings-section { margin-bottom: 30px; }
         .settings-section h4 { margin-bottom: 12px; margin-top: 0; }
+        .login-card { position: relative; }
     </style>
 </head>
 <body>
 
 <div id="loginScreen" class="login-container">
     <div class="login-card">
+        <div id="versionImageBlock" style="margin: -40px -40px 24px -40px; border-radius: 8px 8px 0 0; overflow: hidden; height: 180px; background: linear-gradient(135deg, #1a3a2a 0%, #2d6a4f 40%, #40916c 70%, #52b788 100%); display: flex; align-items: flex-end; justify-content: flex-start;">
+            <span id="versionImageCaption" style="display:none; color: rgba(255,255,255,0.7); font-size: 11px; padding: 8px 12px; font-style: italic;"></span>
+        </div>
         <h2>Rural Rosters</h2>
+        <p id="versionDisplay" style="color: #888; font-size: 13px; margin-bottom: 4px; margin-top: 4px;"></p>
         <input type="email" id="emailInput" class="login-input" placeholder="Email address">
         <input type="password" id="passwordInput" class="login-input" placeholder="Password" onkeypress="if(event.key==='Enter') loginWithEmail()">
         <button class="btn-primary login-button" onclick="loginWithEmail()">Login</button>
@@ -92,6 +100,7 @@
             </div>
         </header>
         <div id="messageContainer"></div>
+        <div id="pendingBanner" style="display:none;"></div>
         <div class="tabs" id="tabsContainer"></div>
         <div id="tabsContent"></div>
     </div>
@@ -143,6 +152,13 @@
 
 <script>
     // UPDATE THIS after first staging deploy — get URL from Cloud Run console
+    // ========== VERSION ==========
+    // Update these three constants for each major release
+    const VERSION_NAME = 'Barron Falls';
+    const VERSION_STAGE = 'Beta';
+    // Wikimedia Commons CC BY-SA 3.0 — Barron Falls, Kuranda QLD
+    const VERSION_IMAGE_URL = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Barron_Falls_Kuranda.JPG/600px-Barron_Falls_Kuranda.JPG';
+
     const BACKEND_URL = 'https://ruralrostersproxy-staging-191282140713.australia-southeast1.run.app';
 
     const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
@@ -170,6 +186,28 @@
     let pendingFortnightSwap = null;
     let pendingProposal = null;
     let pendingDenyProposal = null;
+
+    // Set version display and image on load
+    window.addEventListener('load', function() {
+        const vd = document.getElementById('versionDisplay');
+        if (vd) vd.textContent = VERSION_NAME + ' Version — ' + VERSION_STAGE;
+
+        const imageBlock = document.getElementById('versionImageBlock');
+        const caption = document.getElementById('versionImageCaption');
+        if (VERSION_IMAGE_URL && imageBlock) {
+            const img = document.createElement('img');
+            img.src = VERSION_IMAGE_URL;
+            img.alt = VERSION_NAME + ' Falls, Queensland';
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center 30%;position:absolute;top:0;left:0;';
+            imageBlock.style.position = 'relative';
+            imageBlock.insertBefore(img, imageBlock.firstChild);
+            caption.style.display = 'block';
+            caption.style.position = 'relative';
+            caption.style.zIndex = '1';
+            caption.textContent = VERSION_NAME + ' Falls';
+            img.onerror = function() { img.remove(); caption.style.display = 'none'; };
+        }
+    });
 
     async function callBackend(action, params) {
         try {
@@ -220,6 +258,7 @@
                 officerLocations = locs || [];
                 setupTabs();
                 setTimeout(() => loadMyVacancies(), 500);
+                setTimeout(() => refreshPendingBanner(), 800);
             });
         } else {
             setupTabs();
@@ -442,6 +481,7 @@
             callBackend('getOfficerPastApprovals', {email: currentUser.email})
         ]).then(([pending, past]) => {
             renderApprovals(pending || [], past || []);
+            refreshPendingBanner();
         });
     }
 
@@ -603,6 +643,7 @@
             callBackend('getOfficerSwapProposals', {email: currentUser.email})
         ]).then(([pending, approved, proposals]) => {
             renderSwapsTab(pending || [], approved || [], proposals || []);
+            refreshPendingBanner();
         });
     }
 
@@ -1021,6 +1062,30 @@
     // ============================================================
     // UTILITIES
     // ============================================================
+
+    function refreshPendingBanner() {
+        if (userRole !== 'Officer') return;
+        callBackend('getPendingCounts', { email: currentUser.email }).then(counts => {
+            const banner = document.getElementById('pendingBanner');
+            if (!banner) return;
+            const { shiftRequests, swapProposals } = counts;
+            if (!shiftRequests && !swapProposals) {
+                banner.style.display = 'none';
+                banner.innerHTML = '';
+                return;
+            }
+            let items = '';
+            if (shiftRequests > 0) {
+                items += `<span class="banner-item"><span class="banner-dot"></span>${shiftRequests} pending shift cover request${shiftRequests > 1 ? 's' : ''}</span>`;
+            }
+            if (swapProposals > 0) {
+                if (items) items += '<span style="color:#ccc;">|</span>';
+                items += `<span class="banner-item"><span class="banner-dot"></span>${swapProposals} pending swap proposal${swapProposals > 1 ? 's' : ''}</span>`;
+            }
+            banner.innerHTML = `<div class="pending-banner">⚠ ${items} awaiting review</div>`;
+            banner.style.display = 'block';
+        });
+    }
 
     function showMessage(text, type) {
         const container = document.getElementById('messageContainer');
