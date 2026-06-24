@@ -709,12 +709,12 @@
             proposals.forEach(proposal => {
                 html += `<div style="background: #fff8e1; border-left: 4px solid #f9a825; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
                     <div style="margin-bottom: 8px;">
-                        <strong>${proposal.claimingName}</strong> proposes to take:
+                        <strong>${proposal.claimingName}</strong> <span style=\"color: #856404; font-size: 12px;\">${proposal.claimingAst || ''}</span> proposes to take:
                         <strong> ${proposal.date} - ${proposal.jobType} @ ${proposal.location}</strong>
-                        <span style="color: #666; font-size: 13px;"> (from ${proposal.originalName})</span>
+                        <span style="color: #666; font-size: 13px;"> (from ${proposal.originalName} <span style=\"font-size: 12px;\">${proposal.originalAst || ''}</span>)</span>
                     </div>
                     <div style="color: #555; font-size: 13px; margin-bottom: 10px;">
-                        In return, <strong>${proposal.originalName}</strong> would work:
+                        In return, <strong>${proposal.originalName}</strong> <span style=\"font-size: 12px;\">${proposal.originalAst || ''}</span> would work:
                         <strong>${proposal.offeredDate} - ${proposal.offeredJobType} @ ${proposal.location}</strong>
                     </div>
                     <div style="color: #999; font-size: 12px; margin-bottom: 10px;">Submitted: ${proposal.timestamp}</div>
