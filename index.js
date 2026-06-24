@@ -27,6 +27,7 @@ const GMAIL_APP_PASSWORD = 'gckg msat pnzq ltug';
 
 // STAGING Sheet ID
 const SHEET_ID = '1VPj0f0KPisbr3zTexse_FFsCw4lGMIQCLzMOkEPc6dw';
+const FRONTEND_URL = 'https://ruralroster.github.io/casualrosters-v2/';
 
 console.log('[INIT] Starting backend initialization...');
 
@@ -107,6 +108,7 @@ const server = http.createServer((req, res) => {
         case 'updateUserLocations':       result = await updateUserLocations(params.email, params.locations, params.role); break;
         case 'updateUserAST':             result = await updateUserAST(params.email, params.astQuals); break;
         case 'countPendingRequests':      result = await countPendingRequests(params.email); break;
+        case 'getPendingCounts':           result = await getPendingCounts(params.email); break;
         default: result = { error: 'Unknown action: ' + action };
       }
       res.writeHead(200);
@@ -414,15 +416,11 @@ async function requestShifts(email, name, shifts) {
       const shiftList = locationShifts.map(s => `${s.date} - ${s.jobType} @ ${location}`).join('<br>');
       const shiftListText = locationShifts.map(s => `${s.date} - ${s.jobType} @ ${location}`).join(', ');
 
-      const approveLink = `mailto:${email}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Your Shift Request Approved&body=Dear ${name},%0A%0AYour request to cover the following shift(s) has been approved:%0A${shiftListText}%0A%0APlease confirm the details with your rostering officer.%0A%0AThank you,%0ARural Rosters`;
-      const denyLink = `mailto:${email}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Your Shift Request Not Approved&body=Dear ${name},%0A%0AYour request to cover the following shift(s) has not been approved:%0A${shiftListText}%0A%0AReason: [Please provide reason]%0A%0AThank you,%0ARural Rosters`;
-
       const htmlBody = `<p>Dear {OFFICER_NAME},</p>
 <p><strong>${name}</strong> is requesting to cover the following shifts:</p>
 <p><strong>${shiftList}</strong></p>
-<p><a href="${approveLink}" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; margin-right: 10px;">Approve and reply to ${name}</a></p>
-<p><a href="${denyLink}" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Deny and reply to ${name}</a></p>
-<p>To remove approved shifts from the system: log in, go to "My Vacancies", and remove the approved shift.</p>
+<p>Please log in to Rural Rosters to approve or deny this request:</p>
+<p><a href="${FRONTEND_URL}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Log in to Rural Rosters</a></p>
 <p>Thank you,<br>Rural Rosters Support</p>`;
 
       for (let officer of officers) {
@@ -576,7 +574,7 @@ async function claimShift(claimingEmail, claimingName, originalEmail, originalNa
         await transporter.sendMail({
           from: GMAIL_USER, to: String(row[2]).trim(), cc: 'ruralroster@gmail.com',
           subject: `[Rural Rosters] Shift Swap Claim - ${claimingName} claiming from ${originalName}`,
-          html: `<p>Dear ${String(row[1]).trim()},</p><p><strong>${claimingName}</strong> has claimed a shift from <strong>${originalName}</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please review and approve or deny this swap request.</p><p>Thank you,<br>Rural Rosters Support</p>`
+          html: `<p>Dear ${String(row[1]).trim()},</p><p><strong>${claimingName}</strong> has claimed a shift from <strong>${originalName}</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please log in to Rural Rosters to review this request:</p><p><a href="${FRONTEND_URL}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Log in to Rural Rosters</a></p><p>Thank you,<br>Rural Rosters Support</p>`
         });
         break;
       }
@@ -903,10 +901,13 @@ async function denySwapWithReason(staffEmail, staffName, date, jobType, location
 async function proposeSwap(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, offeredDate, offeredJobType) {
   try {
     const timestamp = new Date().toLocaleString();
+    // Normalise both dates to DD/MM/YYYY before storing
+    const normDate = normaliseDate(date);
+    const normOfferedDate = normaliseDate(offeredDate);
     const row = [
       claimingEmail, claimingName, originalEmail, originalName,
-      date, jobType, location, timestamp, 'Pending', '',
-      offeredDate, offeredJobType, 'swap_proposal'
+      normDate, jobType, location, timestamp, 'Pending', '',
+      normOfferedDate, offeredJobType, 'swap_proposal'
     ];
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
@@ -926,22 +927,17 @@ async function proposeSwap(claimingEmail, claimingName, originalEmail, originalN
         const officerEmail = String(row[2]).trim();
         const officerName = String(row[1]).trim();
 
-        const approveLink = `mailto:${claimingEmail},${originalEmail}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Shift Swap Approved&body=Dear ${claimingName} and ${originalName},%0A%0AYour proposed shift swap has been approved.%0A%0A${claimingName} will cover: ${date} - ${jobType} @ ${location}%0A${originalName} will work: ${offeredDate} - ${offeredJobType} @ ${location}%0A%0APlease coordinate with each other to confirm the handover.%0A%0AThank you,%0ARural Rosters`;
-        const denyLink = `mailto:${claimingEmail}?cc=ruralroster@gmail.com&subject=[Rural Rosters] Swap Proposal Not Approved&body=Dear ${claimingName},%0A%0AYour proposed swap for ${date} - ${jobType} @ ${location} has not been approved.%0A%0APlease contact your rostering officer directly for further details.%0A%0AThank you,%0ARural Rosters`;
-
         await transporter.sendMail({
           from: GMAIL_USER, to: officerEmail, cc: 'ruralroster@gmail.com',
           subject: `[Rural Rosters] Swap Proposal: ${claimingName} ↔ ${originalName}`,
           html: `<p>Dear ${officerName},</p>
 <p><strong>${claimingName}</strong> has proposed the following shift swap:</p>
 <table style="border-collapse: collapse; margin: 15px 0;">
-  <tr><td style="padding: 6px 12px; font-weight: bold;">Taking from ${originalName}:</td><td style="padding: 6px 12px;"><strong>${date} - ${jobType} @ ${location}</strong></td></tr>
-  <tr><td style="padding: 6px 12px; font-weight: bold;">Offering in return:</td><td style="padding: 6px 12px;"><strong>${offeredDate} - ${offeredJobType} @ ${location}</strong></td></tr>
+  <tr><td style="padding: 6px 12px; font-weight: bold;">Taking from ${originalName}:</td><td style="padding: 6px 12px;"><strong>${normDate} - ${jobType} @ ${location}</strong></td></tr>
+  <tr><td style="padding: 6px 12px; font-weight: bold;">Offering in return:</td><td style="padding: 6px 12px;"><strong>${normOfferedDate} - ${offeredJobType} @ ${location}</strong></td></tr>
 </table>
-<p>
-  <a href="${approveLink}" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; margin-right: 10px;">Approve Swap</a>
-  <a href="${denyLink}" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Deny Swap</a>
-</p>
+<p>Please log in to Rural Rosters to approve or deny this proposal:</p>
+<p><a href="${FRONTEND_URL}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Log in to Rural Rosters</a></p>
 <p>Thank you,<br>Rural Rosters Support</p>`
         });
         break;
@@ -1103,6 +1099,18 @@ async function getOfficerApprovedListings(email) {
 async function getOfficerSwapProposals(email) {
   try {
     const locations = await getOfficerLocations(email);
+
+    // Build AST quals map from Users sheet for both parties
+    const usersResult = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:G'
+    });
+    const usersMap = {};
+    for (let row of (usersResult.data.values || [])) {
+      const userEmail = String(row[0] || '').toLowerCase().trim();
+      usersMap[userEmail] = row[6] || 'Emergency';
+    }
+
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Marketplace Claims!A2:M'
@@ -1117,12 +1125,16 @@ async function getOfficerSwapProposals(email) {
         status === 'PENDING' &&
         row[6] && locations.includes(String(row[6]).trim())
       ) {
+        const claimingEmail = row[0];
+        const originalEmail = row[2];
         proposals.push({
-          claimingEmail: row[0], claimingName: row[1],
-          originalEmail: row[2], originalName: row[3],
-          date: row[4], jobType: row[5], location: row[6],
+          claimingEmail, claimingName: row[1],
+          originalEmail, originalName: row[3],
+          date: normaliseDate(row[4]), jobType: row[5], location: row[6],
           timestamp: row[7],
-          offeredDate: row[10] || '', offeredJobType: row[11] || ''
+          offeredDate: normaliseDate(row[10] || ''), offeredJobType: row[11] || '',
+          claimingAst: formatASTLabel(usersMap[claimingEmail.toLowerCase().trim()]),
+          originalAst: formatASTLabel(usersMap[originalEmail.toLowerCase().trim()])
         });
       }
     }
@@ -1299,6 +1311,41 @@ async function countPendingRequests(email) {
   }
 }
 
+
+async function getPendingCounts(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+    if (locations.length === 0) return { shiftRequests: 0, swapProposals: 0 };
+
+    let shiftRequests = 0;
+    let swapProposals = 0;
+
+    const [requestsResponse, claimsResponse] = await Promise.all([
+      sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Requests!A2:G' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:M' })
+    ]);
+
+    for (let row of (requestsResponse.data.values || [])) {
+      if (row[5] && locations.includes(String(row[5]).trim()) && String(row[6] || '').toUpperCase() === 'PENDING') {
+        shiftRequests++;
+      }
+    }
+
+    for (let row of (claimsResponse.data.values || [])) {
+      const type = String(row[12] || '').trim();
+      const status = String(row[8] || '').trim().toUpperCase();
+      if (type === 'swap_proposal' && status === 'PENDING' && row[6] && locations.includes(String(row[6]).trim())) {
+        swapProposals++;
+      }
+    }
+
+    return { shiftRequests, swapProposals };
+  } catch (err) {
+    console.error('getPendingCounts error:', err);
+    return { shiftRequests: 0, swapProposals: 0 };
+  }
+}
+
 // ============================================================================
 // UTILITY
 // ============================================================================
@@ -1312,6 +1359,27 @@ function formatDate(dateVal) {
     return (d < 10 ? '0' + d : d) + '/' + (m < 10 ? '0' + m : m) + '/' + y;
   }
   return String(dateVal);
+}
+
+// Returns a short AST label: (ED) if Emergency only, otherwise lists extras
+function formatASTLabel(astQuals) {
+  const quals = String(astQuals || 'Emergency').split(',').map(q => q.trim());
+  const extras = quals.filter(q => q && q !== 'Emergency');
+  if (extras.length === 0) return '(ED)';
+  return '(' + extras.join(', ') + ')';
+}
+
+// Normalises any date string to DD/MM/YYYY regardless of input format
+function normaliseDate(dateStr) {
+  if (!dateStr) return '';
+  const s = String(dateStr).trim();
+  if (s.includes('/')) return s; // already DD/MM/YYYY
+  if (s.includes('-')) {
+    // YYYY-MM-DD
+    const [y, m, d] = s.split('-');
+    return d.padStart(2,'0') + '/' + m.padStart(2,'0') + '/' + y;
+  }
+  return s;
 }
 
 // ============================================================================
