@@ -539,6 +539,8 @@
                         : '';
 
                     // Route approve/deny to correct backend action based on claim type
+                    const notifyId = `notify-${key.replace(/[|@. ]/g, '-')}-${claimIdx}`;
+
                     const approveBtn = isProposal
                         ? `<button class="btn-success" onclick="approveSwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${claim.offeredDate || ''}', '${claim.offeredJobType || ''}', '${notifyId}')">Approve</button>`
                         : claim.type === 'shift_request'
@@ -550,8 +552,6 @@
                         : claim.type === 'shift_request'
                         ? `<button class="btn-danger" onclick="denyShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`
                         : `<button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`;
-
-                    const notifyId = `notify-${key.replace(/[|@. ]/g, '-')}-${claimIdx}`;
                     html += `<div class="applicant-row">
                         <div class="applicant-info">
                             <strong>${claim.claimingName}</strong> ${typeBadge}<br>
