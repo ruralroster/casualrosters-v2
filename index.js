@@ -623,7 +623,7 @@ async function getOfficerPendingApprovals(email) {
     });
     const claimsRows = claimsResponse.data.values || [];
     for (let i = 0; i < claimsRows.length; i++) {
-      if (claimsRows[i][4] && locations.includes(claimsRows[i][6]) && claimsRows[i][8] && String(claimsRows[i][8]).toUpperCase() === 'PENDING') {
+      if (claimsRows[i][4] && locations.includes(String(claimsRows[i][6]).trim()) && claimsRows[i][8] && String(claimsRows[i][8]).toUpperCase() === 'PENDING') {
         const rowType = claimsRows[i][12] ? String(claimsRows[i][12]).trim() : 'swap_claim';
         claims.push({
           type: rowType,
@@ -643,7 +643,7 @@ async function getOfficerPendingApprovals(email) {
     });
     const requestsRows = requestsResponse.data.values || [];
     for (let i = 0; i < requestsRows.length; i++) {
-      if (requestsRows[i][5] && locations.includes(requestsRows[i][5]) && requestsRows[i][6] && String(requestsRows[i][6]).toUpperCase() === 'PENDING') {
+      if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && requestsRows[i][6] && String(requestsRows[i][6]).toUpperCase() === 'PENDING') {
         claims.push({
           type: 'shift_request',
           claimingEmail: requestsRows[i][1], claimingName: requestsRows[i][2],
@@ -672,7 +672,7 @@ async function getOfficerPastApprovals(email) {
     const claimsRows = claimsResponse.data.values || [];
     for (let i = 0; i < claimsRows.length; i++) {
       const status = String(claimsRows[i][8] || '').trim().toUpperCase();
-      if (claimsRows[i][4] && locations.includes(claimsRows[i][6]) && (status === 'APPROVED' || status === 'DENIED')) {
+      if (claimsRows[i][4] && locations.includes(String(claimsRows[i][6]).trim()) && (status === 'APPROVED' || status === 'DENIED')) {
         const shiftKey = claimsRows[i][4] + '|' + claimsRows[i][5] + '|' + claimsRows[i][6];
         if (!pastApprovals[shiftKey]) {
           pastApprovals[shiftKey] = { date: claimsRows[i][4], jobType: claimsRows[i][5], location: claimsRows[i][6], approved: null, denied: [], resolvedDate: null };
@@ -694,7 +694,7 @@ async function getOfficerPastApprovals(email) {
     const requestsRows = requestsResponse.data.values || [];
     for (let i = 0; i < requestsRows.length; i++) {
       const status = String(requestsRows[i][6] || '').trim().toUpperCase();
-      if (requestsRows[i][5] && locations.includes(requestsRows[i][5]) && (status === 'APPROVED' || status === 'DENIED')) {
+      if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (status === 'APPROVED' || status === 'DENIED')) {
         const shiftKey = requestsRows[i][3] + '|' + requestsRows[i][4] + '|' + requestsRows[i][5];
         if (!pastApprovals[shiftKey]) {
           pastApprovals[shiftKey] = { date: requestsRows[i][3], jobType: requestsRows[i][4], location: requestsRows[i][5], approved: null, denied: [], resolvedDate: null };
