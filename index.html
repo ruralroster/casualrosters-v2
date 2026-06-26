@@ -640,14 +640,15 @@
         Promise.all([
             callBackend('getOfficerMarketplaceListings', {email: currentUser.email}),
             callBackend('getOfficerApprovedListings', {email: currentUser.email}),
-            callBackend('getOfficerSwapProposals', {email: currentUser.email})
-        ]).then(([pending, approved, proposals]) => {
-            renderSwapsTab(pending || [], approved || [], proposals || []);
+            callBackend('getOfficerSwapProposals', {email: currentUser.email}),
+            callBackend('getOfficerPastSwapProposals', {email: currentUser.email})
+        ]).then(([pending, approved, proposals, pastProposals]) => {
+            renderSwapsTab(pending || [], approved || [], proposals || [], pastProposals || []);
             refreshPendingBanner();
         });
     }
 
-    function renderSwapsTab(pending, approved, proposals) {
+    function renderSwapsTab(pending, approved, proposals, pastProposals) {
         const container = document.getElementById('swapsContainer');
         let html = '';
 
@@ -723,6 +724,28 @@
                     </div>
                 </div>`;
             });
+        }
+
+
+        // ── Section 4: Past Swap Proposals ───────────────────
+        html += '<h4 style="margin-top: 28px; margin-bottom: 12px;">Past Swap Proposals</h4>';
+        if (!pastProposals || pastProposals.length === 0) {
+            html += '<p style="color: #999;">No resolved swap proposals</p>';
+        } else {
+            html += '<table><tr><th>Resolved</th><th>Proposed By</th><th>Shift Taken</th><th>In Return</th><th>Status</th></tr>';
+            pastProposals.forEach(p => {
+                const statusBadge = p.status === 'APPROVED'
+                    ? `<span style="background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">Approved</span>`
+                    : `<span style="background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">Denied</span>`;
+                html += `<tr>
+                    <td style="font-size: 13px; white-space: nowrap;">${p.resolvedTimestamp}</td>
+                    <td style="font-size: 13px;">${p.claimingName}</td>
+                    <td style="font-size: 13px;">${p.date} - ${p.jobType} @ ${p.location}<br><span style="color:#666; font-size:12px;">from ${p.originalName}</span></td>
+                    <td style="font-size: 13px;">${p.offeredDate} - ${p.offeredJobType}</td>
+                    <td>${statusBadge}</td>
+                </tr>`;
+            });
+            html += '</table>';
         }
 
         container.innerHTML = html;
@@ -1235,7 +1258,7 @@
             date, jobType, location, offeredDate, offeredJobType, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
-            else { showMessage('✓ Swap proposal approved — both parties notified', 'success'); loadOfficerApprovals(); }
+            else { showMessage('✓ Swap proposal approved — both parties notified', 'success'); loadOfficerApprovals(); loadPendingSwaps(); refreshPendingBanner(); }
         });
     }
 
