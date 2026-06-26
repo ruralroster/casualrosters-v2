@@ -252,7 +252,7 @@ async function getOfficerVacancies(email) {
     if (locations.length === 0) return [];
 
     const allVacancies = [];
-    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
+    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
 
     for (let location of locations) {
       if (!locationNames.includes(location)) continue;
@@ -286,7 +286,7 @@ async function getStaffAvailableShifts(email) {
     console.log('Staff locations:', locations);
 
     const allShifts = [];
-    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
+    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
 
     for (let location of locations) {
       if (!locationNames.includes(location)) {
@@ -327,7 +327,7 @@ async function saveOfficerVacancies(email, vacancies) {
 
     console.log(`Saving ${vacancies.length} vacancies for officer ${email}`);
 
-    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth'];
+    const locationNames = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
 
     const vacanciesByLocation = {};
     for (let vac of vacancies) {
