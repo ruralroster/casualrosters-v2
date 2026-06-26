@@ -1271,7 +1271,7 @@
             date, jobType, location, sendEmail
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
-            else { showMessage('✓ Swap proposal denied', 'success'); loadOfficerApprovals(); }
+            else { showMessage('✓ Swap proposal denied', 'success'); loadOfficerApprovals(); loadPendingSwaps(); refreshPendingBanner(); }
         });
     }
 
