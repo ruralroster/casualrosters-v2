@@ -612,52 +612,48 @@ async function getOfficerMarketplaceListings(email) {
 }
 
 async function getOfficerPendingApprovals(email) {
-  try {
-    const locations = await getOfficerLocations(email);
-    const claims = [];
+  const locations = await getOfficerLocations(email);
+  const claims = [];
 
-    // Read A2:M to include offeredDate (K), offeredJobType (L), type flag (M)
-    const claimsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Marketplace Claims!A2:M'
-    });
-    const claimsRows = claimsResponse.data.values || [];
-    for (let i = 0; i < claimsRows.length; i++) {
-      if (claimsRows[i][4] && locations.includes(String(claimsRows[i][6]).trim()) && claimsRows[i][8] && String(claimsRows[i][8]).toUpperCase() === 'PENDING') {
-        const rowType = claimsRows[i][12] ? String(claimsRows[i][12]).trim() : 'swap_claim';
-        claims.push({
-          type: rowType,
-          claimingEmail: claimsRows[i][0], claimingName: claimsRows[i][1],
-          originalEmail: claimsRows[i][2], originalName: claimsRows[i][3],
-          date: claimsRows[i][4], jobType: claimsRows[i][5], location: claimsRows[i][6],
-          claimedTimestamp: claimsRows[i][7],
-          offeredDate: claimsRows[i][10] || '',
-          offeredJobType: claimsRows[i][11] || ''
-        });
-      }
+  // Read both sheets in parallel — independent try/catch so one failure
+  // doesn't lose the other's data (mirrors getPendingCounts structure)
+  const [claimsRows, requestsRows] = await Promise.all([
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:M' })
+      .then(r => r.data.values || [])
+      .catch(err => { console.error('getOfficerPendingApprovals - Claims read error:', err.message); return []; }),
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Requests!A2:I' })
+      .then(r => r.data.values || [])
+      .catch(err => { console.error('getOfficerPendingApprovals - Requests read error:', err.message); return []; })
+  ]);
+
+  for (let i = 0; i < claimsRows.length; i++) {
+    if (claimsRows[i][4] && locations.includes(String(claimsRows[i][6]).trim()) && claimsRows[i][8] && String(claimsRows[i][8]).toUpperCase() === 'PENDING') {
+      const rowType = claimsRows[i][12] ? String(claimsRows[i][12]).trim() : 'swap_claim';
+      claims.push({
+        type: rowType,
+        claimingEmail: claimsRows[i][0], claimingName: claimsRows[i][1],
+        originalEmail: claimsRows[i][2], originalName: claimsRows[i][3],
+        date: claimsRows[i][4], jobType: claimsRows[i][5], location: claimsRows[i][6],
+        claimedTimestamp: claimsRows[i][7],
+        offeredDate: claimsRows[i][10] || '',
+        offeredJobType: claimsRows[i][11] || ''
+      });
     }
-
-    const requestsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Requests!A2:I'
-    });
-    const requestsRows = requestsResponse.data.values || [];
-    for (let i = 0; i < requestsRows.length; i++) {
-      if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && requestsRows[i][6] && String(requestsRows[i][6]).toUpperCase() === 'PENDING') {
-        claims.push({
-          type: 'shift_request',
-          claimingEmail: requestsRows[i][1], claimingName: requestsRows[i][2],
-          date: requestsRows[i][3], jobType: requestsRows[i][4], location: requestsRows[i][5],
-          claimedTimestamp: requestsRows[i][0]
-        });
-      }
-    }
-
-    return claims;
-  } catch (err) {
-    console.error('getOfficerPendingApprovals error:', err);
-    return [];
   }
+
+  for (let i = 0; i < requestsRows.length; i++) {
+    if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && requestsRows[i][6] && String(requestsRows[i][6]).toUpperCase() === 'PENDING') {
+      claims.push({
+        type: 'shift_request',
+        claimingEmail: requestsRows[i][1], claimingName: requestsRows[i][2],
+        date: requestsRows[i][3], jobType: requestsRows[i][4], location: requestsRows[i][5],
+        claimedTimestamp: requestsRows[i][0]
+      });
+    }
+  }
+
+  console.log(`getOfficerPendingApprovals: ${claims.length} pending items for ${email}`);
+  return claims;
 }
 
 async function getOfficerPastApprovals(email) {
