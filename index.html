@@ -355,7 +355,7 @@
     function loadMyVacancies() {
         showMessage('Loading vacancies...', 'info');
         callBackend('getOfficerVacancies', {email: currentUser.email}).then(vacancies => {
-            renderVacancies(vacancies || []);
+            renderVacancies(Array.isArray(vacancies) ? vacancies : []);
         });
     }
 
@@ -488,7 +488,10 @@
             callBackend('getOfficerPendingApprovals', {email: currentUser.email}),
             callBackend('getOfficerPastApprovals', {email: currentUser.email})
         ]).then(([pending, past]) => {
-            renderApprovals(pending || [], past || []);
+            renderApprovals(
+                Array.isArray(pending) ? pending : [],
+                Array.isArray(past) ? past : []
+            );
             refreshPendingBanner();
         });
     }
