@@ -436,27 +436,35 @@
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             const dateInput = row.querySelector('.vac-date');
-            const jobtypeSelect = row.querySelector('.vac-jobtype');
-            const locationSelect = row.querySelector('.vac-location');
+            const jobtypeEl = row.querySelector('.vac-jobtype');
 
-            if (dateInput && jobtypeSelect && locationSelect && !dateInput.disabled) {
-                let date = dateInput.value;
-                const jobType = jobtypeSelect.value;
-                const location = locationSelect.value;
+            if (!dateInput || !jobtypeEl) continue;
 
-                if (date && date.includes('-')) {
-                    const [year, month, day] = date.split('-');
-                    date = day + '/' + month + '/' + year;
-                }
+            let date = dateInput.value;
+            const jobType = jobtypeEl.value;
+            let location;
 
-                if (date && jobType && location) {
-                    vacancies.push({ date, jobType, location });
-                }
+            if (dateInput.disabled) {
+                // Existing vacancy row — location is plain text in the second cell
+                location = row.cells[1] ? row.cells[1].textContent.trim() : '';
+            } else {
+                // New vacancy row — location is from the select element
+                const locationEl = row.querySelector('.vac-location');
+                location = locationEl ? locationEl.value : '';
+            }
+
+            if (date && date.includes('-')) {
+                const [year, month, day] = date.split('-');
+                date = day + '/' + month + '/' + year;
+            }
+
+            if (date && jobType && location) {
+                vacancies.push({ date, jobType, location });
             }
         }
 
         if (vacancies.length === 0) {
-            showMessage('No valid new vacancies to save', 'error');
+            showMessage('No valid vacancies to save', 'error');
             return;
         }
 
@@ -466,7 +474,7 @@
             vacancies: vacancies
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
-            else { showMessage('✓ Vacancies saved', 'success'); loadMyVacancies(); }
+            else { showMessage('\u2713 Vacancies saved', 'success'); loadMyVacancies(); }
         });
     }
 
