@@ -98,6 +98,7 @@ const server = http.createServer((req, res) => {
         case 'denySwapWithReason':        result = await denySwapWithReason(params.staffEmail, params.staffName, params.date, params.jobType, params.location, params.reason); break;
         case 'getOfficerApprovedListings':  result = await getOfficerApprovedListings(params.email); break;
         case 'getOfficerSwapProposals':     result = await getOfficerSwapProposals(params.email); break;
+        case 'getOfficerPastSwapProposals':  result = await getOfficerPastSwapProposals(params.email); break;
         case 'removeFromMarketplace':       result = await removeFromMarketplace(params.staffEmail, params.staffName, params.date, params.jobType, params.location); break;
         case 'denySwapProposalWithReason':  result = await denySwapProposalWithReason(params.claimingEmail, params.claimingName, params.date, params.jobType, params.location, params.reason); break;
         case 'approveShiftRequest':       result = await approveShiftRequest(params.email, params.name, params.date, params.jobType, params.location, params.sendEmail !== false); break;
@@ -1343,6 +1344,56 @@ async function getPendingCounts(email) {
   } catch (err) {
     console.error('getPendingCounts error:', err);
     return { shiftRequests: 0, swapProposals: 0 };
+  }
+}
+
+
+async function getOfficerPastSwapProposals(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Marketplace Claims!A2:M'
+    });
+    const rows = result.data.values || [];
+    const past = [];
+
+    for (let row of rows) {
+      const type = String(row[12] || '').trim();
+      const status = String(row[8] || '').trim().toUpperCase();
+      if (
+        type === 'swap_proposal' &&
+        (status === 'APPROVED' || status === 'DENIED') &&
+        row[6] && locations.includes(String(row[6]).trim())
+      ) {
+        past.push({
+          claimingEmail: row[0], claimingName: row[1],
+          originalEmail: row[2], originalName: row[3],
+          date: normaliseDate(row[4]), jobType: row[5], location: row[6],
+          submittedTimestamp: row[7],
+          status: status,
+          resolvedTimestamp: row[9] || row[7],
+          offeredDate: normaliseDate(row[10] || ''), offeredJobType: row[11] || ''
+        });
+      }
+    }
+
+    // Sort by resolvedTimestamp descending (most recent first)
+    past.sort((a, b) => {
+      const parse = s => {
+        if (!s) return 0;
+        // Handle DD/MM/YYYY HH:MM:SS or similar locale string
+        const d = new Date(s);
+        return isNaN(d) ? 0 : d.getTime();
+      };
+      return parse(b.resolvedTimestamp) - parse(a.resolvedTimestamp);
+    });
+
+    return past;
+  } catch (err) {
+    console.error('getOfficerPastSwapProposals error:', err);
+    return [];
   }
 }
 
