@@ -965,11 +965,11 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
     for (let i = 0; i < claimRows.length; i++) {
       if (
         claimRows[i][0] === claimingEmail &&
-        String(claimRows[i][4]).trim() === date &&
+        normaliseDate(String(claimRows[i][4]).trim()) === normaliseDate(date) &&
         String(claimRows[i][5]).trim() === jobType &&
         String(claimRows[i][6]).trim() === location &&
         String(claimRows[i][12] || '').trim() === 'swap_proposal' &&
-        String(claimRows[i][8]).trim() === 'Pending'
+        String(claimRows[i][8]).trim().toUpperCase() === 'PENDING'
       ) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
@@ -1032,11 +1032,11 @@ async function denySwapProposal(claimingEmail, claimingName, officerEmail, offic
     for (let i = 0; i < claimRows.length; i++) {
       if (
         claimRows[i][0] === claimingEmail &&
-        String(claimRows[i][4]).trim() === date &&
+        normaliseDate(String(claimRows[i][4]).trim()) === normaliseDate(date) &&
         String(claimRows[i][5]).trim() === jobType &&
         String(claimRows[i][6]).trim() === location &&
         String(claimRows[i][12] || '').trim() === 'swap_proposal' &&
-        String(claimRows[i][8]).trim() === 'Pending'
+        String(claimRows[i][8]).trim().toUpperCase() === 'PENDING'
       ) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
@@ -1198,11 +1198,11 @@ async function denySwapProposalWithReason(claimingEmail, claimingName, date, job
     for (let i = 0; i < claimRows.length; i++) {
       if (
         claimRows[i][0] === claimingEmail &&
-        String(claimRows[i][4]).trim() === date &&
+        normaliseDate(String(claimRows[i][4]).trim()) === normaliseDate(date) &&
         String(claimRows[i][5]).trim() === jobType &&
         String(claimRows[i][6]).trim() === location &&
         String(claimRows[i][12] || '').trim() === 'swap_proposal' &&
-        String(claimRows[i][8]).trim() === 'Pending'
+        String(claimRows[i][8]).trim().toUpperCase() === 'PENDING'
       ) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
