@@ -256,15 +256,19 @@ async function getOfficerVacancies(email) {
 
     for (let location of locations) {
       if (!locationNames.includes(location)) continue;
-      const result = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: `Vacancies - ${location}!A2:D`
-      });
-      const rows = result.data.values || [];
-      for (let row of rows) {
-        if (row[0] && row[1]) {
-          allVacancies.push({ date: formatDate(row[0]), jobType: row[1], location: row[2] });
+      try {
+        const result = await sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: `Vacancies - ${location}!A2:D`
+        });
+        const rows = result.data.values || [];
+        for (let row of rows) {
+          if (row[0] && row[1]) {
+            allVacancies.push({ date: formatDate(row[0]), jobType: row[1], location: row[2] });
+          }
         }
+      } catch (locErr) {
+        console.log(`getOfficerVacancies: skipping ${location} - ${locErr.message}`);
       }
     }
 
@@ -612,8 +616,9 @@ async function getOfficerMarketplaceListings(email) {
 }
 
 async function getOfficerPendingApprovals(email) {
-  const locations = await getOfficerLocations(email);
-  const claims = [];
+  try {
+    const locations = await getOfficerLocations(email);
+    const claims = [];
 
   // Read both sheets in parallel — independent try/catch so one failure
   // doesn't lose the other's data (mirrors getPendingCounts structure)
@@ -652,8 +657,12 @@ async function getOfficerPendingApprovals(email) {
     }
   }
 
-  console.log(`getOfficerPendingApprovals: ${claims.length} pending items for ${email}`);
-  return claims;
+    console.log(`getOfficerPendingApprovals: ${claims.length} pending items for ${email}`);
+    return claims;
+  } catch (err) {
+    console.error('getOfficerPendingApprovals error:', err);
+    return [];
+  }
 }
 
 async function getOfficerPastApprovals(email) {
