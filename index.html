@@ -498,7 +498,12 @@
 
     function renderApprovals(pending, past) {
         const container = document.getElementById('approvalsContainer');
+        if (!container) {
+            console.error('approvalsContainer not found in DOM');
+            return;
+        }
         let html = '';
+        try {
 
         if (pending.length === 0) {
             html += '<h4>Outstanding Cover Requests</h4><p style="color: #999;">No outstanding requests</p>';
@@ -591,7 +596,11 @@
             html += '</table>';
         }
 
-        container.innerHTML = html;
+            container.innerHTML = html;
+        } catch(err) {
+            console.error('renderApprovals error:', err);
+            container.innerHTML = '<p style="color: #dc3545; font-weight: bold;">Display error: ' + err.message + '</p>';
+        }
     }
 
     function approveSwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, notifyId) {
