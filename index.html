@@ -84,8 +84,9 @@
         </div>
         <h2>Rural Rosters</h2>
         <p id="versionDisplay" style="color: #888; font-size: 13px; margin-bottom: 4px; margin-top: 4px;"></p>
-        <input type="email" id="emailInput" class="login-input" placeholder="Email address">
-        <input type="password" id="passwordInput" class="login-input" placeholder="Password" onkeypress="if(event.key==='Enter') loginWithEmail()">
+        <input type="email" id="emailInput" class="login-input" placeholder="Email address" oninput="clearLoginError()">
+        <input type="password" id="passwordInput" class="login-input" placeholder="Password" oninput="clearLoginError()" onkeypress="if(event.key==='Enter') loginWithEmail()">
+        <div id="loginError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
         <button class="btn-primary login-button" onclick="loginWithEmail()">Login</button>
     </div>
 </div>
@@ -223,18 +224,28 @@
         }
     }
 
+    function showLoginError(msg) {
+        const el = document.getElementById('loginError');
+        if (el) { el.textContent = msg; el.style.display = 'block'; }
+    }
+
+    function clearLoginError() {
+        const el = document.getElementById('loginError');
+        if (el) { el.style.display = 'none'; el.textContent = ''; }
+    }
+
     function loginWithEmail() {
         const email = document.getElementById('emailInput').value.trim().toLowerCase();
         const password = document.getElementById('passwordInput').value;
 
         if (!email || !password) {
-            showMessage('Please enter both email and password', 'error');
+            showLoginError('Please enter both email and password');
             return;
         }
 
         callBackend('checkUserExists', {email, password}).then(user => {
             if (user && user.error) {
-                showMessage(user.error, 'error');
+                showLoginError(user.error);
                 return;
             }
             if (user) {
