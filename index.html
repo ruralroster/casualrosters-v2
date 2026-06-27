@@ -160,6 +160,17 @@
     // Wikimedia Commons CC BY-SA 3.0 — Barron Falls, Kuranda QLD
     const VERSION_IMAGE_URL = 'barron-falls.jpeg';
 
+    // QH pay fortnight anchor — Monday 25 May 2026
+    // All fortnights are 14-day cycles from this date
+    const QH_FORTNIGHT_ANCHOR = new Date(2026, 4, 25); // month is 0-indexed
+
+    function getQHFortnightStart(date) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const daysSinceAnchor = Math.floor((date - QH_FORTNIGHT_ANCHOR) / msPerDay);
+        const fortnightNum = Math.floor(daysSinceAnchor / 14);
+        return new Date(QH_FORTNIGHT_ANCHOR.getTime() + fortnightNum * 14 * msPerDay);
+    }
+
     const BACKEND_URL = 'https://ruralrostersproxy-staging-191282140713.australia-southeast1.run.app';
 
     const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
@@ -970,33 +981,49 @@
     function renderFortnightGrid(dateStr) {
         const container = document.getElementById('fortnightGrid');
         const [year, month, day] = dateStr.split('-');
-        const shiftDate = new Date(year, parseInt(month) - 1, parseInt(day));
-        const fortnightStart = new Date(shiftDate);
-        const dayOfWeek = fortnightStart.getDay();
-        const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
-        fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
+        const shiftDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
 
-        let html = '<div class="fortnight-grid">';
+        // Use QH pay fortnight anchored to 25/05/2026
+        const fortnightStart = getQHFortnightStart(shiftDate);
+
         const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+        // Build a single compact table: date header + Day row + Night row
+        // 7 columns per week, 2 weeks side by side on desktop, stacked list on mobile
+        let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+
+        // Week labels
+        html += '<tr><td colspan="7" style="text-align:center;font-weight:600;padding:4px;background:#f0f0f0;border:1px solid #ddd;">Week 1</td>';
+        html += '<td colspan="7" style="text-align:center;font-weight:600;padding:4px;background:#f0f0f0;border:1px solid #ddd;">Week 2</td></tr>';
+
+        // Date header row
+        html += '<tr>';
         for (let i = 0; i < 14; i++) {
             const d = new Date(fortnightStart);
             d.setDate(d.getDate() + i);
-            html += `<div class="fortnight-day">${dayNames[i % 7]}<br>${d.getDate()}</div>`;
+            const dateNum = d.getDate();
+            const monthNum = d.getMonth() + 1;
+            html += `<td style="text-align:center;padding:4px 2px;border:1px solid #ddd;background:#f9f9f9;white-space:nowrap;">${dayNames[i%7]}<br>${dateNum}/${monthNum}</td>`;
         }
-        html += '</div>';
+        html += '</tr>';
 
-        html += '<div style="margin-top: 20px;"><h4>Day Shifts</h4><div class="fortnight-grid">';
+        // Day row
+        html += '<tr><td colspan="14" style="padding:3px 4px;font-weight:600;background:#e8f4fd;font-size:11px;">Day</td></tr>';
+        html += '<tr>';
         for (let i = 0; i < 14; i++) {
-            html += `<div class="fortnight-checkbox"><input type="checkbox" class="fortnight-day-checkbox" value="${i}"><label style="margin-bottom: 0; font-size: 11px;">Day</label></div>`;
+            html += `<td style="text-align:center;padding:6px 2px;border:1px solid #ddd;"><input type="checkbox" class="fortnight-day-checkbox" value="${i}" style="width:16px;height:16px;cursor:pointer;"></td>`;
         }
-        html += '</div></div>';
+        html += '</tr>';
 
-        html += '<div style="margin-top: 20px;"><h4>Night Shifts</h4><div class="fortnight-grid">';
+        // Night row
+        html += '<tr><td colspan="14" style="padding:3px 4px;font-weight:600;background:#edf2f7;font-size:11px;">Night</td></tr>';
+        html += '<tr>';
         for (let i = 0; i < 14; i++) {
-            html += `<div class="fortnight-checkbox"><input type="checkbox" class="fortnight-night-checkbox" value="${i}"><label style="margin-bottom: 0; font-size: 11px;">Night</label></div>`;
+            html += `<td style="text-align:center;padding:6px 2px;border:1px solid #ddd;"><input type="checkbox" class="fortnight-night-checkbox" value="${i}" style="width:16px;height:16px;cursor:pointer;"></td>`;
         }
-        html += '</div></div>';
+        html += '</tr>';
 
+        html += '</table></div>';
         container.innerHTML = html;
     }
 
@@ -1164,10 +1191,7 @@
         } else {
             return [];
         }
-        const fortnightStart = new Date(shiftDate);
-        const dayOfWeek = fortnightStart.getDay();
-        const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
-        fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
+        const fortnightStart = getQHFortnightStart(shiftDate);
 
         return availableDaysStr.split(',').map(entry => {
             const trimmed = entry.trim();
@@ -1315,10 +1339,7 @@
         } else {
             return availableDaysStr;
         }
-        const fortnightStart = new Date(shiftDate);
-        const dayOfWeek = fortnightStart.getDay();
-        const daysToMonday = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
-        fortnightStart.setDate(fortnightStart.getDate() + daysToMonday);
+        const fortnightStart = getQHFortnightStart(shiftDate);
         return availableDaysStr.split(',').map(entry => {
             const trimmed = entry.trim();
             const dashIdx = trimmed.lastIndexOf('-');
