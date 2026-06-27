@@ -389,7 +389,7 @@
             }
             html += `<tr>
                 <td><input type="date" class="vac-date" value="${dateString}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
-                <td style="padding: 12px;">${vac.location}</td>
+                <td style="padding: 12px;">${vac.location}<input type="hidden" class="vac-location" value="${vac.location}"></td>
                 <td><input type="text" value="${vac.jobType}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
                 <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
             </tr>`;
@@ -453,16 +453,8 @@
 
             let date = dateInput.value;
             const jobType = jobtypeEl.value;
-            let location;
-
-            if (dateInput.disabled) {
-                // Existing vacancy row — location is plain text in the second cell
-                location = row.cells[1] ? row.cells[1].textContent.trim() : '';
-            } else {
-                // New vacancy row — location is from the select element
-                const locationEl = row.querySelector('.vac-location');
-                location = locationEl ? locationEl.value : '';
-            }
+            const locationEl = row.querySelector('.vac-location');
+            let location = locationEl ? locationEl.value.trim() : '';
 
             if (date && date.includes('-')) {
                 const [year, month, day] = date.split('-');
