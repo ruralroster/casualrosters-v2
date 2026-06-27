@@ -390,7 +390,7 @@
             html += `<tr>
                 <td><input type="date" class="vac-date" value="${dateString}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
                 <td style="padding: 12px;">${vac.location}<input type="hidden" class="vac-location" value="${vac.location}"></td>
-                <td><input type="text" value="${vac.jobType}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
+                <td><input type="text" class="vac-jobtype" value="${vac.jobType}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
                 <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
             </tr>`;
         });
