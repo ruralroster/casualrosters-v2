@@ -124,6 +124,7 @@
         <h3>Select Available Days for Swap</h3>
         <p>Check which days in this fortnight you can work:</p>
         <div id="fortnightGrid"></div>
+        <div id="fortnightError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
         <div class="modal-buttons">
             <button class="btn-primary" onclick="submitFortnightSelection()">Confirm</button>
             <button class="btn-secondary" onclick="closeFortnightModal()">Cancel</button>
@@ -333,6 +334,11 @@
                     <div class="form-group"><label>Job Type</label><select id="swapJobType"><option value="">Select Job Type</option></select></div>
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;"><input type="checkbox" id="swapIsServiceDisruption" /><label for="swapIsServiceDisruption" style="margin-bottom: 0;">Service-disruption shift</label></div>
                     <button class="btn-primary" onclick="openFortnightModal()">Select Available Days</button>
+                    <div id="swapSelectedDays" style="display:none; margin-top:12px; background:#f0f9ff; border:1px solid #bee5eb; border-radius:4px; padding:10px 14px; font-size:13px; color:#0c5460;">
+                        <strong>Can work in exchange:</strong>
+                        <div id="swapSelectedDaysText" style="margin-top:4px;"></div>
+                    </div>
+                    <button id="offerSwapBtn" class="btn-success" style="margin-top:16px; opacity:0.4; cursor:not-allowed;" disabled onclick="offerShiftForSwap()">Offer Shift for Swap</button>
                 </div>
                 <div id="tab-2" class="tab-content">
                     <h3>Settings</h3>
@@ -1028,32 +1034,60 @@
     }
 
     function submitFortnightSelection() {
-        const dayChecks = Array.from(document.querySelectorAll('.fortnight-day-checkbox:checked')).map(cb => `Day-${cb.value}`);
-        const nightChecks = Array.from(document.querySelectorAll('.fortnight-night-checkbox:checked')).map(cb => `Night-${cb.value}`);
+        const dayChecks = Array.from(document.querySelectorAll('.fortnight-day-checkbox:checked')).map(cb => 'Day-' + cb.value);
+        const nightChecks = Array.from(document.querySelectorAll('.fortnight-night-checkbox:checked')).map(cb => 'Night-' + cb.value);
         const selectedDays = [...dayChecks, ...nightChecks];
 
-        if (selectedDays.length === 0) { showMessage('Please select at least one day', 'error'); return; }
+        if (selectedDays.length === 0) {
+            const err = document.getElementById('fortnightError');
+            if (err) { err.textContent = 'Please select at least one day'; err.style.display = 'block'; }
+            return;
+        }
+        const fortnightErr = document.getElementById('fortnightError');
+        if (fortnightErr) fortnightErr.style.display = 'none';
 
-        showMessage('Submitting swap request (pending officer approval)...', 'info');
+        // Store selection — actual submit happens via offerShiftForSwap
+        pendingFortnightSwap.availableDays = selectedDays.join(',');
+
+        // Display selected dates below the form
+        const formatted = formatAvailableDays(pendingFortnightSwap.availableDays, pendingFortnightSwap.date);
+        const display = document.getElementById('swapSelectedDays');
+        const text = document.getElementById('swapSelectedDaysText');
+        if (display && text) { text.textContent = formatted; display.style.display = 'block'; }
+
+        // Enable the offer button
+        const offerBtn = document.getElementById('offerSwapBtn');
+        if (offerBtn) { offerBtn.disabled = false; offerBtn.style.opacity = '1'; offerBtn.style.cursor = 'pointer'; }
+
+        closeFortnightModal();
+    }
+
+    function offerShiftForSwap() {
+        if (!pendingFortnightSwap || !pendingFortnightSwap.availableDays) {
+            showMessage('Please select available days first', 'error'); return;
+        }
+        showMessage('Submitting swap offer...', 'info');
         callBackend('listShiftForSwap', {
             email: currentUser.email,
             name: currentUser.name,
             date: pendingFortnightSwap.date,
             jobType: pendingFortnightSwap.jobType,
             location: pendingFortnightSwap.location,
-            isServiceDisruption: document.getElementById('swapIsServiceDisruption').checked,
-            availableDays: selectedDays.join(',')
+            isServiceDisruption: document.getElementById('swapIsServiceDisruption') ? document.getElementById('swapIsServiceDisruption').checked : false,
+            availableDays: pendingFortnightSwap.availableDays
         }).then(result => {
-            if (result.error) showMessage(result.error, 'error');
-            else {
-                showMessage('✓ Swap request submitted and pending officer approval', 'success');
-                document.getElementById('swapDate').value = '';
-                document.getElementById('swapLocation').value = '';
-                document.getElementById('swapJobType').value = '';
-                document.getElementById('swapIsServiceDisruption').checked = false;
-                closeFortnightModal();
-                loadCurrentSwaps();
-            }
+            if (result.error) { showMessage(result.error, 'error'); return; }
+            showMessage('\u2713 Shift offered for swap \u2014 pending officer approval', 'success');
+            document.getElementById('swapDate').value = '';
+            document.getElementById('swapLocation').value = '';
+            document.getElementById('swapJobType').innerHTML = '<option value="">Select Job Type</option>';
+            if (document.getElementById('swapIsServiceDisruption')) document.getElementById('swapIsServiceDisruption').checked = false;
+            const display = document.getElementById('swapSelectedDays');
+            if (display) display.style.display = 'none';
+            const offerBtn = document.getElementById('offerSwapBtn');
+            if (offerBtn) { offerBtn.disabled = true; offerBtn.style.opacity = '0.4'; offerBtn.style.cursor = 'not-allowed'; }
+            pendingFortnightSwap = {};
+            loadCurrentSwaps();
         });
     }
 
