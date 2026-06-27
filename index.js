@@ -521,13 +521,47 @@ async function denyShiftRequest(email, name, date, jobType, location, sendEmail 
 
 async function listShiftForSwap(email, name, date, jobType, location, isServiceDisruption, availableDays) {
   try {
-    const row = [email, name, date, jobType, location, 'Pending Verification', isServiceDisruption ? 'Y' : 'N', availableDays || ''];
+    const normDate = normaliseDate(date);
+    const row = [email, name, normDate, jobType, location, 'Pending Verification', isServiceDisruption ? 'Y' : 'N', availableDays || ''];
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
       range: 'Marketplace Listings!A2:H',
       valueInputOption: 'RAW',
       resource: { values: [row] }
     });
+    console.log('Shift listed for swap:', email, normDate, jobType, location);
+
+    // Notify officer(s) for this location
+    try {
+      const officersResult = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: 'Rostering Officers!A2:C'
+      });
+      const officers = (officersResult.data.values || [])
+        .filter(r => String(r[0]).trim() === location)
+        .map(r => ({ name: String(r[1]).trim(), email: String(r[2]).trim() }));
+
+      for (let officer of officers) {
+        await transporter.sendMail({
+          from: GMAIL_USER,
+          to: officer.email,
+          cc: GMAIL_USER,
+          subject: '[Rural Rosters] New Shift Swap Request Pending Review',
+          html: `<p>Dear ${officer.name},</p>
+<p><strong>${name}</strong> has listed the following shift for swap and is awaiting your approval:</p>
+<table style="border-collapse:collapse;margin:10px 0;">
+  <tr><td style="padding:6px 12px;font-weight:bold;">Shift:</td><td style="padding:6px 12px;"><strong>${normDate} - ${jobType} @ ${location}</strong></td></tr>
+  <tr><td style="padding:6px 12px;font-weight:bold;">Service disruption:</td><td style="padding:6px 12px;">${isServiceDisruption ? 'Yes' : 'No'}</td></tr>
+</table>
+<p>Please log in to review and approve or deny this swap request.</p>
+<p><a href="${FRONTEND_URL}" style="background:#2c3e50;color:white;padding:10px 20px;border-radius:4px;text-decoration:none;display:inline-block;margin:10px 0;">Open Rural Rosters</a></p>
+<p>Thank you,<br>Rural Rosters Support</p>`
+        });
+      }
+    } catch (emailErr) {
+      console.error('listShiftForSwap officer email error:', emailErr.message);
+    }
+
     return { success: true, message: 'Shift listed for swap (pending officer approval)' };
   } catch (err) {
     console.error('listShiftForSwap error:', err);
