@@ -63,6 +63,12 @@
         .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .modal-content h3 { margin-bottom: 20px; }
         .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .modal-header h3 { margin: 0; }
+        .info-icon { background: none; border: 2px solid #aaa; border-radius: 50%; width: 28px; height: 28px; font-size: 14px; cursor: pointer; color: #666; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .info-icon:hover { border-color: #2c3e50; color: #2c3e50; }
+        .modal-help { display: none; background: #f0f9ff; border: 1px solid #bee5eb; border-radius: 4px; padding: 10px 14px; font-size: 13px; color: #0c5460; margin-bottom: 16px; line-height: 1.5; }
+        .modal-help.visible { display: block; }
         .fortnight-grid { display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px; margin: 15px 0; }
         .fortnight-day { text-align: center; font-size: 11px; font-weight: 600; padding: 8px; background: #f0f0f0; border-radius: 3px; }
         .fortnight-checkbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 3px; min-height: 80px; }
@@ -109,7 +115,13 @@
 
 <div id="denySwapModal" class="modal">
     <div class="modal-content">
-        <h3>Deny Swap Request</h3>
+        <div class="modal-header">
+            <h3>Deny Swap Request</h3>
+            <button class="info-icon" onclick="toggleModalHelp('denySwapHelp')" title="What is this?">👁</button>
+        </div>
+        <div id="denySwapHelp" class="modal-help">
+            Use this to decline a swap request. Your reason will be emailed directly to the staff member so they understand why it was not approved. Be clear and professional — this message goes to them verbatim.
+        </div>
         <p>Provide a reason for denying this swap:</p>
         <textarea id="denyReason" style="width: 100%; height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" placeholder="Enter reason..."></textarea>
         <div class="modal-buttons">
@@ -135,7 +147,13 @@
 
 <div id="proposalModal" class="modal">
     <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
-        <h3>Propose Shift Swap</h3>
+        <div class="modal-header">
+            <h3>Propose Shift Swap</h3>
+            <button class="info-icon" onclick="toggleModalHelp('proposalHelp')" title="What is this?">👁</button>
+        </div>
+        <div id="proposalHelp" class="modal-help">
+            You are proposing to swap shifts with the person who listed the shift above. Select one of the dates they are available to cover — this must be a shift you are currently rostered to work and are willing to give up. Select the job type of that shift. Both parties will be notified by email, and the swap still requires officer approval before it is confirmed.
+        </div>
         <div id="proposalShiftDetail" style="background: #f9f9f9; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 14px;"></div>
         <p id="proposalDatesInstruction" style="font-size: 14px; margin-bottom: 14px;"></p>
         <div id="proposalDatesContainer" style="margin-bottom: 20px;"></div>
@@ -153,6 +171,11 @@
 
 <script>
     // UPDATE THIS after first staging deploy — get URL from Cloud Run console
+    function toggleModalHelp(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('visible');
+    }
+
     // ========== VERSION ==========
     // Update these three constants for each major release
     const VERSION_NAME = 'Barron Falls';
