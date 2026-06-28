@@ -1046,22 +1046,28 @@
         const fortnightErr = document.getElementById('fortnightError');
         if (fortnightErr) fortnightErr.style.display = 'none';
 
-        // Store selection — actual submit happens via offerShiftForSwap
-        pendingFortnightSwap.availableDays = selectedDays.join(',');
-        clearMessage(); // Clear any stale error from clicking offer before selecting days
+        try {
+            // Store selection — actual submit happens via offerShiftForSwap
+            if (!pendingFortnightSwap) pendingFortnightSwap = {};
+            pendingFortnightSwap.availableDays = selectedDays.join(',');
+            clearMessage();
 
-        // Display selected dates below the form
-        const formatted = formatAvailableDays(pendingFortnightSwap.date, pendingFortnightSwap.availableDays);
-        const display = document.getElementById('swapSelectedDays');
-        const text = document.getElementById('swapSelectedDaysText');
-        if (display && text) { text.textContent = formatted; display.style.display = 'block'; }
+            // Display selected dates below the form
+            const formatted = formatAvailableDays(pendingFortnightSwap.date, pendingFortnightSwap.availableDays);
+            const display = document.getElementById('swapSelectedDays');
+            const text = document.getElementById('swapSelectedDaysText');
+            if (display && text) { text.textContent = formatted; display.style.display = 'block'; }
 
-        // Enable the offer button
-        const offerBtn = document.getElementById('offerSwapBtn');
-        if (offerBtn) { offerBtn.disabled = false; offerBtn.style.opacity = '1'; offerBtn.style.cursor = 'pointer'; }
+            // Enable the offer button
+            const offerBtn = document.getElementById('offerSwapBtn');
+            if (offerBtn) { offerBtn.disabled = false; offerBtn.style.opacity = '1'; offerBtn.style.cursor = 'pointer'; }
 
-        // Close modal directly — do NOT call closeFortnightModal() as that nulls pendingFortnightSwap
-        document.getElementById('fortnightModal').classList.remove('active');
+            // Close modal directly — do NOT call closeFortnightModal() as that nulls pendingFortnightSwap
+            document.getElementById('fortnightModal').classList.remove('active');
+        } catch(err) {
+            const errEl = document.getElementById('fortnightError');
+            if (errEl) { errEl.textContent = 'Error: ' + err.message; errEl.style.display = 'block'; }
+        }
     }
 
     function offerShiftForSwap() {
