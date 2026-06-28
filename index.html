@@ -1059,7 +1059,8 @@
         const offerBtn = document.getElementById('offerSwapBtn');
         if (offerBtn) { offerBtn.disabled = false; offerBtn.style.opacity = '1'; offerBtn.style.cursor = 'pointer'; }
 
-        closeFortnightModal();
+        // Close modal directly — do NOT call closeFortnightModal() as that nulls pendingFortnightSwap
+        document.getElementById('fortnightModal').classList.remove('active');
     }
 
     function offerShiftForSwap() {
