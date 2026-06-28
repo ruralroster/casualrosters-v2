@@ -531,23 +531,22 @@ async function listShiftForSwap(email, name, date, jobType, location, isServiceD
     });
     console.log('Shift listed for swap:', email, normDate, jobType, location);
 
-    // Notify officer(s) for this location
+    // Notify officer(s) for this location + always CC ruralroster
     try {
       const officersResult = await sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
         range: 'Rostering Officers!A2:C'
       });
-      const officers = (officersResult.data.values || [])
+      const allRows = officersResult.data.values || [];
+      console.log(`listShiftForSwap: ${allRows.length} rows in Rostering Officers, filtering for location="${location}"`);
+
+      const officers = allRows
         .filter(r => String(r[0]).trim() === location)
         .map(r => ({ name: String(r[1]).trim(), email: String(r[2]).trim() }));
 
-      for (let officer of officers) {
-        await transporter.sendMail({
-          from: GMAIL_USER,
-          to: officer.email,
-          cc: GMAIL_USER,
-          subject: '[Rural Rosters] New Shift Swap Request Pending Review',
-          html: `<p>Dear ${officer.name},</p>
+      console.log(`listShiftForSwap: found ${officers.length} officer(s) for ${location}:`, officers.map(o => o.email));
+
+      const emailHtml = `<p>Dear Rostering Officer,</p>
 <p><strong>${name}</strong> has listed the following shift for swap and is awaiting your approval:</p>
 <table style="border-collapse:collapse;margin:10px 0;">
   <tr><td style="padding:6px 12px;font-weight:bold;">Shift:</td><td style="padding:6px 12px;"><strong>${normDate} - ${jobType} @ ${location}</strong></td></tr>
@@ -555,11 +554,35 @@ async function listShiftForSwap(email, name, date, jobType, location, isServiceD
 </table>
 <p>Please log in to review and approve or deny this swap request.</p>
 <p><a href="${FRONTEND_URL}" style="background:#2c3e50;color:white;padding:10px 20px;border-radius:4px;text-decoration:none;display:inline-block;margin:10px 0;">Open Rural Rosters</a></p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Thank you,<br>Rural Rosters Support</p>`;
+
+      if (officers.length > 0) {
+        for (let officer of officers) {
+          try {
+            await transporter.sendMail({
+              from: GMAIL_USER,
+              to: officer.email,
+              cc: GMAIL_USER,
+              subject: '[Rural Rosters] New Shift Swap Request Pending Review',
+              html: emailHtml.replace('Dear Rostering Officer,', `Dear ${officer.name},`)
+            });
+            console.log(`listShiftForSwap: email sent to officer ${officer.email}`);
+          } catch (sendErr) {
+            console.error(`listShiftForSwap: failed to email ${officer.email}:`, sendErr.message);
+          }
+        }
+      } else {
+        // No officer found for location — notify ruralroster directly
+        console.log(`listShiftForSwap: no officer found for ${location}, notifying ruralroster`);
+        await transporter.sendMail({
+          from: GMAIL_USER,
+          to: GMAIL_USER,
+          subject: `[Rural Rosters] New Swap Request — No Officer Found for ${location}`,
+          html: emailHtml
         });
       }
     } catch (emailErr) {
-      console.error('listShiftForSwap officer email error:', emailErr.message);
+      console.error('listShiftForSwap email section error:', emailErr.message);
     }
 
     return { success: true, message: 'Shift listed for swap (pending officer approval)' };
