@@ -604,7 +604,7 @@ async function getMarketplaceListings(email) {
     for (let row of rows) {
       if (locations.includes(String(row[4]).trim()) && String(row[5]).trim() === 'Available') {
         listings.push({
-          originalEmail: row[0], originalName: row[1], date: row[2], jobType: row[3], location: row[4],
+          originalEmail: row[0], originalName: row[1], date: normaliseDate(row[2]), jobType: row[3], location: row[4],
           isServiceDisruption: row[6] === 'Y', availableDays: row[7] || ''
         });
       }
@@ -660,7 +660,7 @@ async function getOfficerMarketplaceListings(email) {
     for (let row of rows) {
       if (locations.includes(String(row[4]).trim()) && String(row[5]).trim() === 'Pending Verification') {
         listings.push({
-          originalEmail: row[0], originalName: row[1], date: row[2], jobType: row[3], location: row[4],
+          originalEmail: row[0], originalName: row[1], date: normaliseDate(row[2]), jobType: row[3], location: row[4],
           isServiceDisruption: row[6] === 'Y', availableDays: row[7] || ''
         });
       }
@@ -1146,7 +1146,7 @@ async function getOfficerApprovedListings(email) {
     for (let row of rows) {
       if (locations.includes(String(row[4]).trim()) && String(row[5]).trim() === 'Available') {
         listings.push({
-          originalEmail: row[0], originalName: row[1], date: row[2],
+          originalEmail: row[0], originalName: row[1], date: normaliseDate(row[2]),
           jobType: row[3], location: row[4],
           isServiceDisruption: row[6] === 'Y', availableDays: row[7] || ''
         });
