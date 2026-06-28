@@ -447,7 +447,7 @@
             table = container.querySelector('table');
         }
 
-        const newRow = table.insertRow();
+        const newRow = table.insertRow(1); // Insert after header — appears at top
         let locHtml = '<select class="vac-location" onchange="updateNewRowJobTypes(this)" style="width: 100%; padding: 6px;"><option value="">Select Location</option>';
         officerLocations.forEach(loc => {
             locHtml += `<option value="${loc}">${loc}</option>`;
