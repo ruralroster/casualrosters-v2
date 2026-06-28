@@ -1050,7 +1050,7 @@
             // Store selection — actual submit happens via offerShiftForSwap
             if (!pendingFortnightSwap) pendingFortnightSwap = {};
             pendingFortnightSwap.availableDays = selectedDays.join(',');
-            clearMessage();
+            const mc = document.getElementById('messageContainer'); if (mc) mc.innerHTML = '';
 
             // Display selected dates below the form
             const formatted = formatAvailableDays(pendingFortnightSwap.date, pendingFortnightSwap.availableDays);
