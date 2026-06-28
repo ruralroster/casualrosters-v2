@@ -1050,7 +1050,7 @@
         pendingFortnightSwap.availableDays = selectedDays.join(',');
 
         // Display selected dates below the form
-        const formatted = formatAvailableDays(pendingFortnightSwap.availableDays, pendingFortnightSwap.date);
+        const formatted = formatAvailableDays(pendingFortnightSwap.date, pendingFortnightSwap.availableDays);
         const display = document.getElementById('swapSelectedDays');
         const text = document.getElementById('swapSelectedDaysText');
         if (display && text) { text.textContent = formatted; display.style.display = 'block'; }
@@ -1386,7 +1386,7 @@
             const day = String(d.getDate()).padStart(2, '0');
             const month = String(d.getMonth() + 1).padStart(2, '0');
             const year = String(d.getFullYear()).slice(-2);
-            return day + '/' + month + '/' + year + ' ' + type;
+            return day + '/' + month + '/' + year + ' ' + (type === 'Day' ? 'D' : 'N');
         }).join(', ');
     }
     function logout() {
