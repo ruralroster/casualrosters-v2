@@ -324,6 +324,7 @@
                 <button class="tab-button active" onclick="switchTab(0, this)">My Vacancies</button>
                 <button class="tab-button" onclick="switchTab(1, this)">Shift Cover Approvals</button>
                 <button class="tab-button" onclick="switchTab(2, this)">Swaps</button>
+                <button class="tab-button" onclick="switchTab(3, this)">Settings</button>
             `;
             tabsContent.innerHTML = `
                 <div id="tab-0" class="tab-content active">
@@ -334,6 +335,7 @@
                 </div>
                 <div id="tab-1" class="tab-content"><h3>Shift Cover Approvals</h3><div id="approvalsContainer"></div></div>
                 <div id="tab-2" class="tab-content"><h3>Pending Swaps</h3><div id="swapsContainer"></div></div>
+                <div id="tab-3" class="tab-content"><h3>Settings</h3><div id="officerSettingsContainer"></div></div>
             `;
         } else {
             tabsContainer.innerHTML = `
@@ -393,6 +395,7 @@
             if (idx === 0) loadMyVacancies();
             if (idx === 1) loadOfficerApprovals();
             if (idx === 2) loadPendingSwaps();
+            if (idx === 3) loadOfficerSettings();
         } else {
             if (idx === 0) loadStaffShifts();
             if (idx === 1) loadCurrentSwaps();
@@ -1423,6 +1426,116 @@
             return day + '/' + month + '/' + year + ' ' + (type === 'Day' ? 'D' : 'N');
         }).join(', ');
     }
+
+    // ============================================================
+    // OFFICER SETTINGS — SHIFT TYPES EDITOR
+    // ============================================================
+
+    function loadOfficerSettings() {
+        const container = document.getElementById('officerSettingsContainer');
+        if (!container) return;
+        container.innerHTML = '<p style="color:#999;">Loading shift types...</p>';
+        callBackend('getShiftTypesForOfficer', { email: currentUser.email }).then(types => {
+            renderShiftTypesEditor(Array.isArray(types) ? types : []);
+        });
+    }
+
+    function renderShiftTypesEditor(types) {
+        const container = document.getElementById('officerSettingsContainer');
+        if (!container) return;
+
+        // Group by location
+        const byLocation = {};
+        for (const t of types) {
+            if (!byLocation[t.location]) byLocation[t.location] = [];
+            byLocation[t.location].push(t);
+        }
+
+        let html = '<h4 style="margin-bottom: 16px;">Manage Shift Types</h4>';
+        html += '<p style="color:#666;font-size:13px;margin-bottom:20px;">Add new shift types for your locations. Existing shift types cannot be deleted to preserve historical records.</p>';
+
+        // Add new shift type form
+        html += `<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:20px;margin-bottom:24px;">
+            <h4 style="margin-bottom:14px;">Add New Shift Type</h4>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Location</label>
+                <select id="newShiftTypeLocation" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;" onchange="loadShiftTypesForLocation(this.value)">
+                    <option value="">Select location</option>`;
+        for (const loc of officerLocations) {
+            html += `<option value="${loc}">${loc}</option>`;
+        }
+        html += `</select>
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Job Type Name</label>
+                <input type="text" id="newShiftTypeLabel" placeholder="e.g. Anaesthetic On-Call" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+            </div>
+            <div style="display:flex;gap:12px;margin-bottom:12px;">
+                <div style="flex:1;">
+                    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Start Time</label>
+                    <input type="time" id="newShiftTypeStart" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">End Time</label>
+                    <input type="time" id="newShiftTypeEnd" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                </div>
+            </div>
+            <div id="shiftTypeFormError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
+            <button class="btn-primary" onclick="saveNewShiftType()">Add Shift Type</button>
+        </div>`;
+
+        // Existing shift types by location
+        if (types.length > 0) {
+            html += '<h4 style="margin-bottom:12px;">Existing Shift Types</h4>';
+            for (const [loc, locTypes] of Object.entries(byLocation)) {
+                html += `<div style="margin-bottom:16px;">
+                    <h5 style="color:#2c3e50;margin-bottom:8px;font-size:14px;">${loc}</h5>
+                    <table style="width:100%;border-collapse:collapse;">
+                        <tr style="background:#f9f9f9;">
+                            <th style="padding:8px;text-align:left;border-bottom:1px solid #ddd;font-size:13px;">Job Type</th>
+                            <th style="padding:8px;text-align:left;border-bottom:1px solid #ddd;font-size:13px;">Start</th>
+                            <th style="padding:8px;text-align:left;border-bottom:1px solid #ddd;font-size:13px;">End</th>
+                        </tr>`;
+                for (const t of locTypes) {
+                    html += `<tr style="border-bottom:1px solid #f0f0f0;">
+                        <td style="padding:8px;font-size:13px;">${t.jobType}</td>
+                        <td style="padding:8px;font-size:13px;color:#666;">${t.startTime || '—'}</td>
+                        <td style="padding:8px;font-size:13px;color:#666;">${t.endTime || '—'}</td>
+                    </tr>`;
+                }
+                html += '</table></div>';
+            }
+        } else {
+            html += '<p style="color:#999;font-size:13px;">No shift types found for your locations.</p>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    function saveNewShiftType() {
+        const location = document.getElementById('newShiftTypeLocation').value;
+        const jobType = document.getElementById('newShiftTypeLabel').value.trim();
+        const startTime = document.getElementById('newShiftTypeStart').value;
+        const endTime = document.getElementById('newShiftTypeEnd').value;
+        const errEl = document.getElementById('shiftTypeFormError');
+
+        if (!location) { errEl.textContent = 'Please select a location'; errEl.style.display = 'block'; return; }
+        if (!jobType)  { errEl.textContent = 'Please enter a job type name'; errEl.style.display = 'block'; return; }
+        errEl.style.display = 'none';
+
+        callBackend('addShiftType', {
+            officerEmail: currentUser.email, location, jobType, startTime, endTime
+        }).then(result => {
+            if (result.error) {
+                errEl.textContent = result.error;
+                errEl.style.display = 'block';
+            } else {
+                showMessage('\u2713 Shift type added', 'success');
+                loadOfficerSettings(); // Reload to show new type in list
+            }
+        });
+    }
+
     function logout() {
         currentUser = null;
         userRole = null;
