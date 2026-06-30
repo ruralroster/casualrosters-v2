@@ -110,6 +110,8 @@ const server = http.createServer((req, res) => {
         case 'updateUserAST':             result = await updateUserAST(params.email, params.astQuals); break;
         case 'countPendingRequests':      result = await countPendingRequests(params.email); break;
         case 'getPendingCounts':           result = await getPendingCounts(params.email); break;
+        case 'addShiftType':               result = await addShiftType(params.officerEmail, params.location, params.jobType, params.startTime, params.endTime); break;
+        case 'getShiftTypesForOfficer':    result = await getShiftTypesForOfficer(params.email); break;
         default: result = { error: 'Unknown action: ' + action };
       }
       res.writeHead(200);
@@ -470,11 +472,21 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
       }
     }
     if (sendEmail) {
-      await transporter.sendMail({
+      const times = await getShiftTimes(location, jobType);
+      const icsContent = generateICS(date, jobType, location, times.start, times.end, `${jobType} @ ${location} — Approved`);
+      const mailOptions = {
         from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Shift Request Approved`,
-        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
-      });
+        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>A calendar event is attached — tap it to add the shift to your calendar.</p><p>Thank you,<br>Rural Rosters Support</p>`
+      };
+      if (icsContent) {
+        mailOptions.attachments = [{
+          filename: `shift-${date.replace(/\//g,'-')}.ics`,
+          content: icsContent,
+          contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+        }];
+      }
+      await transporter.sendMail(mailOptions);
     }
     return { success: true };
   } catch (err) {
@@ -1045,7 +1057,9 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
 
     // Email Staff B (claimingEmail) — taking Staff A's shift
     if (sendEmail && claimingEmail && claimingEmail.trim()) {
-      await transporter.sendMail({
+      const timesB = await getShiftTimes(location, jobType);
+      const icsB = generateICS(date, jobType, location, timesB.start, timesB.end, `${jobType} @ ${location} — Swap Approved`);
+      const mailB = {
         from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Swap Proposal Approved`,
         html: `<p>Dear ${claimingName},</p>
@@ -1054,14 +1068,19 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
   <tr><td style="padding: 6px 12px; font-weight: bold;">You are now covering:</td><td style="padding: 6px 12px;"><strong>${date} - ${jobType} @ ${location}</strong> (from ${originalName})</td></tr>
   <tr><td style="padding: 6px 12px; font-weight: bold;">In exchange you gave up:</td><td style="padding: 6px 12px;"><strong>${offeredDate} - ${offeredJobType} @ ${location}</strong></td></tr>
 </table>
+<p>A calendar event is attached for your new shift — tap it to add to your calendar.</p>
 <p>Please coordinate with ${originalName} to confirm the handover.</p>
 <p>Thank you,<br>Rural Rosters Support</p>`
-      });
+      };
+      if (icsB) mailB.attachments = [{ filename: `shift-${date.replace(/\//g,'-')}.ics`, content: icsB, contentType: 'text/calendar; charset=utf-8; method=REQUEST' }];
+      await transporter.sendMail(mailB);
     }
 
     // Email Staff A (originalEmail) — taking Staff B's offered shift
     if (sendEmail && originalEmail && originalEmail.trim()) {
-      await transporter.sendMail({
+      const timesA = await getShiftTimes(location, offeredJobType);
+      const icsA = generateICS(offeredDate, offeredJobType, location, timesA.start, timesA.end, `${offeredJobType} @ ${location} — Swap Approved`);
+      const mailA = {
         from: GMAIL_USER, to: originalEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Shift Swap Approved`,
         html: `<p>Dear ${originalName},</p>
@@ -1070,9 +1089,12 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
   <tr><td style="padding: 6px 12px; font-weight: bold;">Your shift being covered by ${claimingName}:</td><td style="padding: 6px 12px;"><strong>${date} - ${jobType} @ ${location}</strong></td></tr>
   <tr><td style="padding: 6px 12px; font-weight: bold;">You are now working:</td><td style="padding: 6px 12px;"><strong>${offeredDate} - ${offeredJobType} @ ${location}</strong></td></tr>
 </table>
+<p>A calendar event is attached for your new shift — tap it to add to your calendar.</p>
 <p>Please coordinate with ${claimingName} to confirm the handover.</p>
 <p>Thank you,<br>Rural Rosters Support</p>`
-      });
+      };
+      if (icsA) mailA.attachments = [{ filename: `shift-${offeredDate.replace(/\//g,'-')}.ics`, content: icsA, contentType: 'text/calendar; charset=utf-8; method=REQUEST' }];
+      await transporter.sendMail(mailA);
     }
 
     return { success: true, message: 'Swap proposal approved and both parties notified' };
@@ -1457,6 +1479,140 @@ async function getOfficerPastSwapProposals(email) {
     console.error('getOfficerPastSwapProposals error:', err);
     return [];
   }
+}
+
+
+
+async function addShiftType(officerEmail, location, jobType, startTime, endTime) {
+  try {
+    // Verify officer has access to this location
+    const locations = await getOfficerLocations(officerEmail);
+    if (!locations.includes(location)) {
+      return { error: 'You do not have access to that location' };
+    }
+    if (!jobType || !jobType.trim()) return { error: 'Job type name is required' };
+
+    // Check for duplicate
+    const existing = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Shift Types!A2:D'
+    });
+    for (let row of (existing.data.values || [])) {
+      if (String(row[0]).trim() === jobType.trim() && String(row[1]).trim() === location) {
+        return { error: `"${jobType}" already exists for ${location}` };
+      }
+    }
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'Shift Types!A2:D',
+      valueInputOption: 'RAW',
+      resource: { values: [[jobType.trim(), location, startTime || '', endTime || '']] }
+    });
+    console.log(`addShiftType: ${jobType} @ ${location} added by ${officerEmail}`);
+    return { success: true };
+  } catch (err) {
+    console.error('addShiftType error:', err);
+    return { error: err.toString() };
+  }
+}
+
+async function getShiftTypesForOfficer(email) {
+  try {
+    const locations = await getOfficerLocations(email);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Shift Types!A2:D'
+    });
+    const rows = response.data.values || [];
+    const types = rows
+      .filter(row => row[0] && locations.includes(String(row[1]).trim()))
+      .map(row => ({
+        jobType: String(row[0]).trim(),
+        location: String(row[1]).trim(),
+        startTime: String(row[2] || '').trim(),
+        endTime: String(row[3] || '').trim()
+      }));
+    return types;
+  } catch (err) {
+    console.error('getShiftTypesForOfficer error:', err);
+    return [];
+  }
+}
+
+// ── ICS / SHIFT TYPES HELPERS ─────────────────────────────────────────────────
+
+async function getShiftTimes(location, jobType) {
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Shift Types!A2:D'
+    });
+    const rows = response.data.values || [];
+    for (let row of rows) {
+      if (String(row[0]).trim() === jobType && String(row[1]).trim() === location) {
+        return { start: String(row[2] || '').trim(), end: String(row[3] || '').trim() };
+      }
+    }
+    return { start: '', end: '' };
+  } catch (err) {
+    console.error('getShiftTimes error:', err.message);
+    return { start: '', end: '' };
+  }
+}
+
+function generateICS(date, jobType, location, startTime, endTime, summary) {
+  // date is DD/MM/YYYY
+  const parts = String(date).split('/');
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts;
+  const dateStr = `${yyyy}${mm.padStart(2,'0')}${dd.padStart(2,'0')}`;
+  const uid = `rural-rosters-${dateStr}-${jobType.replace(/\s+/g,'-')}-${Date.now()}@ruralrosters`;
+
+  let dtStart, dtEnd;
+  if (startTime && endTime && startTime.includes(':') && endTime.includes(':')) {
+    const [sh, sm] = startTime.split(':');
+    const [eh, em] = endTime.split(':');
+    dtStart = `${dateStr}T${sh.padStart(2,'0')}${sm.padStart(2,'0')}00`;
+    dtEnd   = `${dateStr}T${eh.padStart(2,'0')}${em.padStart(2,'0')}00`;
+  } else {
+    // Fall back to all-day event
+    dtStart = `${dateStr}`;
+    dtEnd   = `${dateStr}`;
+    return [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Rural Rosters//CHHHS//EN',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTART;VALUE=DATE:${dtStart}`,
+      `DTEND;VALUE=DATE:${dtEnd}`,
+      `SUMMARY:${summary || jobType + ' @ ' + location}`,
+      `LOCATION:${location}`,
+      'DESCRIPTION:Rural Rosters — Approved Shift',
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+  }
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Rural Rosters//CHHHS//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${summary || jobType + ' @ ' + location}`,
+    `LOCATION:${location}`,
+    'DESCRIPTION:Rural Rosters — Approved Shift',
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
 }
 
 // ============================================================================
