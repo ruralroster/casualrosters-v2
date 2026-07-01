@@ -131,6 +131,25 @@
     </div>
 </div>
 
+<div id="backupConfirmModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Shifts Already Applied For</h3>
+            <button class="info-icon" onclick="toggleModalHelp('backupHelp')" title="What is this?">👁</button>
+        </div>
+        <div id="backupHelp" class="modal-help">
+            These shifts already have applications from another staff member awaiting officer approval. You can still apply — your application will be held as a backup in case the first applicant is denied.
+        </div>
+        <p style="margin-bottom:12px;">The following shifts you selected already have applications pending approval:</p>
+        <div id="backupShiftList" style="margin-bottom:16px;"></div>
+        <p style="font-size:13px;color:#666;">Would you like to add your application as a backup for these shifts?</p>
+        <div class="modal-buttons">
+            <button class="btn-success" onclick="confirmBackupRequest(true)">Yes, add me as backup</button>
+            <button class="btn-secondary" onclick="confirmBackupRequest(false)">No, skip these shifts</button>
+        </div>
+    </div>
+</div>
+
 <div id="fortnightModal" class="modal">
     <div class="modal-content">
         <h3>Select Available Days for Swap</h3>
@@ -573,10 +592,13 @@
                 claimList.forEach((claim) => {
                     const isProposal = claim.type === 'swap_proposal';
                     const isSwap = claim.type === 'swap_claim';
+                    const isBackupApp = !isProposal && !isSwap && claim.requestStatus && claim.requestStatus.toUpperCase() === 'BACKUP';
                     const typeBadge = isProposal
                         ? `<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP PROPOSAL</span>`
                         : isSwap
                         ? `<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP CLAIM</span>`
+                        : isBackupApp
+                        ? `<span style="background: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">BACKUP</span>`
                         : `<span style="background: #cfe2ff; color: #084298; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SHIFT REQUEST</span>`;
 
                     const proposalDetail = isProposal && claim.offeredDate
@@ -624,21 +646,30 @@
         if (past.length === 0) {
             html += '<p style="color: #999;">No resolved requests</p>';
         } else {
-            html += '<table>';
-            html += '<tr><th>Shift Date</th><th>Location</th><th>Job Type</th><th>Date Resolved</th><th>Approved For</th><th>Denied For</th></tr>';
             past.forEach(item => {
-                const approvedLink = item.approved ? `<a href="mailto:${item.approved.email}">${item.approved.name}</a>` : '-';
-                const deniedLinks = item.denied.length > 0 ? item.denied.map(d => `<a href="mailto:${d.email}">${d.name}</a>`).join(', ') : '-';
-                html += `<tr>
-                    <td>${item.date}</td>
-                    <td>${item.location}</td>
-                    <td>${item.jobType}</td>
-                    <td>${item.resolvedDate}</td>
-                    <td>${approvedLink}</td>
-                    <td>${deniedLinks}</td>
-                </tr>`;
+                const autoDenied = item.autoDenied || [];
+                html += `<div style="background:white;border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:12px;">
+                    <div style="font-weight:600;margin-bottom:8px;">${item.date} - ${item.jobType} @ ${item.location}</div>
+                    <div style="font-size:13px;color:#666;margin-bottom:4px;">Resolved: ${item.resolvedDate || '—'}</div>`;
+                if (item.approved) {
+                    html += `<div style="margin-top:8px;"><span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">APPROVED</span> <a href="mailto:${item.approved.email}" style="margin-left:6px;font-size:13px;">${item.approved.name}</a></div>`;
+                }
+                if (item.denied.length > 0) {
+                    html += `<div style="margin-top:6px;font-size:13px;color:#666;">Denied: ${item.denied.map(d => `<a href="mailto:${d.email}">${d.name}</a>`).join(', ')}</div>`;
+                }
+                if (autoDenied.length > 0) {
+                    html += `<div style="margin-top:10px;border-top:1px solid #f0f0f0;padding-top:10px;">
+                        <div style="font-size:12px;font-weight:600;color:#856404;margin-bottom:6px;">Auto-denied applicants — eligible for re-offer if approved person withdraws:</div>`;
+                    autoDenied.forEach(ad => {
+                        html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                            <span style="font-size:13px;flex:1;">${ad.name}</span>
+                            <button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="reofferShiftCall('${ad.email}','${ad.name}','${item.date}','${item.jobType}','${item.location}')">Re-offer</button>
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
             });
-            html += '</table>';
         }
 
             container.innerHTML = html;
@@ -646,6 +677,19 @@
             console.error('renderApprovals error:', err);
             container.innerHTML = '<p style="color: #dc3545; font-weight: bold;">Display error: ' + err.message + '</p>';
         }
+    }
+
+
+    function reofferShiftCall(staffEmail, staffName, date, jobType, location) {
+        showMessage('Sending re-offer email...', 'info');
+        callBackend('reofferShift', {
+            officerEmail: currentUser.email,
+            officerName: currentUser.name,
+            staffEmail, staffName, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage('Error: ' + result.error, 'error');
+            else showMessage('\u2713 Re-offer email sent to ' + staffName, 'success');
+        });
     }
 
     function approveSwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, notifyId) {
@@ -913,34 +957,82 @@
 
         let html = '';
         shifts.forEach((shift, idx) => {
-            html += `<div class="shift-item">
+            const pending = shift.hasPendingApplicants;
+            html += `<div class="shift-item" style="${pending ? 'opacity:0.7;' : ''}">
                 <div class="shift-item-header">
-                    <input type="checkbox" class="shift-checkbox" value="${idx}" style="margin-right: 10px;">
-                    <label style="margin-bottom: 0; flex: 1;"><strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong></label>
+                    <input type="checkbox" class="shift-checkbox" value="${idx}" data-pending="${pending ? 'true' : 'false'}" style="margin-right: 10px;">
+                    <label style="margin-bottom: 0; flex: 1; ${pending ? 'color:#999;' : ''}">
+                        <strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong>
+                        ${pending ? '<span style="font-size:11px;color:#aaa;margin-left:6px;">(application pending approval)</span>' : ''}
+                    </label>
                 </div>
             </div>`;
         });
         container.innerHTML = html;
     }
 
+    let pendingBackupRequest = null; // Stores shift list while backup modal is open
+
     function requestShifts() {
-        const checkboxes = document.querySelectorAll('.shift-checkbox:checked');
+        const checkboxes = Array.from(document.querySelectorAll('.shift-checkbox:checked'));
         if (checkboxes.length === 0) { showMessage('Please select at least one shift', 'error'); return; }
 
+        const allShifts = checkboxes.map(cb => {
+            const item = cb.parentElement.parentElement;
+            const text = item.querySelector('label strong').textContent;
+            const parts = text.split(' - ');
+            const date = parts[0].trim();
+            const rest = parts.slice(1).join(' - ');
+            const atIdx = rest.lastIndexOf(' @ ');
+            const jobType = rest.substring(0, atIdx).trim();
+            const location = rest.substring(atIdx + 3).trim();
+            return { date, jobType, location, isPending: cb.getAttribute('data-pending') === 'true' };
+        });
+
+        const pendingShifts = allShifts.filter(s => s.isPending);
+        const normalShifts = allShifts.filter(s => !s.isPending);
+
+        if (pendingShifts.length > 0) {
+            // Show backup confirmation modal
+            pendingBackupRequest = { allShifts, normalShifts, pendingShifts, checkboxes };
+            const listEl = document.getElementById('backupShiftList');
+            listEl.innerHTML = pendingShifts.map(s =>
+                `<div style="background:#fff8e1;border-left:3px solid #E6A817;padding:8px 12px;margin-bottom:6px;border-radius:3px;font-size:13px;">
+                    <strong>${s.date} - ${s.jobType} @ ${s.location}</strong>
+                </div>`
+            ).join('');
+            document.getElementById('backupConfirmModal').classList.add('active');
+        } else {
+            submitShiftRequests(allShifts, checkboxes);
+        }
+    }
+
+    function confirmBackupRequest(includeBackup) {
+        document.getElementById('backupConfirmModal').classList.remove('active');
+        if (!pendingBackupRequest) return;
+        const { allShifts, normalShifts, pendingShifts, checkboxes } = pendingBackupRequest;
+        pendingBackupRequest = null;
+        const shiftsToSubmit = includeBackup ? allShifts : normalShifts;
+        if (shiftsToSubmit.length === 0) {
+            showMessage('No shifts submitted.', 'info');
+            return;
+        }
+        submitShiftRequests(shiftsToSubmit.map(s => ({ date: s.date, jobType: s.jobType, location: s.location })), checkboxes);
+    }
+
+    function submitShiftRequests(shifts, checkboxes) {
         showMessage('Sending shift requests...', 'info');
         callBackend('requestShifts', {
             email: currentUser.email,
             name: currentUser.name,
-            shifts: Array.from(checkboxes).map(cb => {
-                const item = cb.parentElement.parentElement;
-                const text = item.querySelector('label strong').textContent;
-                const [date, jobAndLocation] = text.split(' - ');
-                const [jobType, location] = jobAndLocation.split(' @ ');
-                return { date: date.trim(), jobType: jobType.trim(), location: location.trim() };
-            })
+            shifts
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
-            else { showMessage('✓ Shift requests sent!', 'success'); Array.from(checkboxes).forEach(cb => cb.checked = false); }
+            else {
+                showMessage('\u2713 Shift requests sent!', 'success');
+                checkboxes.forEach(cb => cb.checked = false);
+                loadStaffShifts(); // Refresh to update pending flags
+            }
         });
     }
 
