@@ -110,7 +110,7 @@ const server = http.createServer((req, res) => {
         case 'updateUserAST':             result = await updateUserAST(params.email, params.astQuals); break;
         case 'countPendingRequests':      result = await countPendingRequests(params.email); break;
         case 'getPendingCounts':           result = await getPendingCounts(params.email); break;
-        case 'addShiftType':               result = await addShiftType(params.officerEmail, params.location, params.jobType, params.startTime, params.endTime); break;
+        case 'addShiftType':               result = await addShiftType(params.officerEmail, params.location, params.jobType, params.startTime, params.endTime, params.astRequired); break;
         case 'getShiftTypesForOfficer':    result = await getShiftTypesForOfficer(params.email); break;
         default: result = { error: 'Unknown action: ' + action };
       }
@@ -1483,7 +1483,7 @@ async function getOfficerPastSwapProposals(email) {
 
 
 
-async function addShiftType(officerEmail, location, jobType, startTime, endTime) {
+async function addShiftType(officerEmail, location, jobType, startTime, endTime, astRequired) {
   try {
     // Verify officer has access to this location
     const locations = await getOfficerLocations(officerEmail);
@@ -1505,11 +1505,11 @@ async function addShiftType(officerEmail, location, jobType, startTime, endTime)
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: 'Shift Types!A2:D',
+      range: 'Shift Types!A2:E',
       valueInputOption: 'RAW',
-      resource: { values: [[jobType.trim(), location, startTime || '', endTime || '']] }
+      resource: { values: [[jobType.trim(), location, startTime || '', endTime || '', astRequired || '']] }
     });
-    console.log(`addShiftType: ${jobType} @ ${location} added by ${officerEmail}`);
+    console.log(`addShiftType: ${jobType} @ ${location} (AST: ${astRequired}) added by ${officerEmail}`);
     return { success: true };
   } catch (err) {
     console.error('addShiftType error:', err);
@@ -1522,21 +1522,23 @@ async function getShiftTypesForOfficer(email) {
     const locations = await getOfficerLocations(email);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Shift Types!A2:D'
+      range: 'Shift Types!A2:E'
     });
     const rows = response.data.values || [];
     const types = rows
       .filter(row => row[0] && locations.includes(String(row[1]).trim()))
       .map(row => ({
-        jobType: String(row[0]).trim(),
-        location: String(row[1]).trim(),
-        startTime: String(row[2] || '').trim(),
-        endTime: String(row[3] || '').trim()
+        jobType:     String(row[0] || '').trim(),
+        location:    String(row[1] || '').trim(),
+        startTime:   String(row[2] || '').trim(),
+        endTime:     String(row[3] || '').trim(),
+        astRequired: String(row[4] || '').trim()
       }));
+
     return types;
   } catch (err) {
     console.error('getShiftTypesForOfficer error:', err);
-    return [];
+    return { types: [], astOptions: ['None', 'Emergency', 'Anaesthetics', 'O&G'] };
   }
 }
 
