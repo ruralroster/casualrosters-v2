@@ -468,15 +468,14 @@
         const location = select.value;
         const row = select.closest('tr');
         const jobTypeSelect = row.querySelector('.vac-jobtype');
-        const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
-
-        jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
-        jobTypes.forEach(jt => {
-            const opt = document.createElement('option');
-            opt.value = jt;
-            opt.textContent = jt;
-            jobTypeSelect.appendChild(opt);
-        });
+        jobTypeSelect.innerHTML = '<option value="">Loading...</option>';
+        if (!location) { jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>'; return; }
+        callBackend('getJobTypesForLocation', { location }).then(result => {
+            jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+            if (result.jobTypes) result.jobTypes.forEach(jt => {
+                jobTypeSelect.innerHTML += '<option value="' + jt + '">' + jt + '</option>';
+            });
+        }).catch(() => { jobTypeSelect.innerHTML = '<option value="">Error loading</option>'; });
     }
 
     function removeVacancyRow(btn) {
