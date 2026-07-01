@@ -111,6 +111,8 @@ const server = http.createServer((req, res) => {
         case 'countPendingRequests':      result = await countPendingRequests(params.email); break;
         case 'getPendingCounts':           result = await getPendingCounts(params.email); break;
         case 'addShiftType':               result = await addShiftType(params.officerEmail, params.location, params.jobType, params.startTime, params.endTime, params.astRequired); break;
+        case 'reofferShift':               result = await reofferShift(params.officerEmail, params.officerName, params.staffEmail, params.staffName, params.date, params.jobType, params.location); break;
+        case 'checkShiftApplicants':       result = await checkShiftApplicants(params.shifts); break;
         case 'getShiftTypesForOfficer':    result = await getShiftTypesForOfficer(params.email); break;
         default: result = { error: 'Unknown action: ' + action };
       }
@@ -317,7 +319,27 @@ async function getStaffAvailableShifts(email) {
     }
 
     console.log('Total shifts found:', allShifts.length);
-    return allShifts;
+
+    // Cross-reference Requests sheet to flag shifts with pending applicants
+    try {
+      const reqResp = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID, range: 'Requests!A2:G'
+      });
+      const pendingKeys = new Set();
+      for (const row of (reqResp.data.values || [])) {
+        const st = String(row[6] || '').toUpperCase();
+        if (st === 'PENDING' || st === 'BACKUP') {
+          pendingKeys.add(normaliseDate(String(row[3]||'').trim())+'|'+String(row[4]||'').trim()+'|'+String(row[5]||'').trim());
+        }
+      }
+      return allShifts.map(s => ({
+        ...s,
+        hasPendingApplicants: pendingKeys.has(normaliseDate(s.date)+'|'+s.jobType+'|'+s.location)
+      }));
+    } catch (e) {
+      console.error('getStaffAvailableShifts pending check error:', e.message);
+      return allShifts;
+    }
   } catch (err) {
     console.error('getStaffAvailableShifts error:', err);
     return [];
@@ -400,7 +422,38 @@ async function requestShifts(email, name, shifts) {
       officersByLocation[location].push({ name: String(row[1]).trim(), email: String(row[2]).trim() });
     }
 
-    const requestsToAdd = shifts.map(s => [timestamp, email, name, s.date, s.jobType, s.location, 'Pending', '', '']);
+    // Check each shift for existing applicants — determine Pending vs Backup
+    const existingReqResp = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID, range: 'Requests!A2:G'
+    });
+    const existingRows = existingReqResp.data.values || [];
+
+    const isBackup = (shift) => existingRows.some(row => {
+      const st = String(row[6]||'').toUpperCase();
+      return (st === 'PENDING' || st === 'BACKUP') &&
+        normaliseDate(String(row[3]||'').trim()) === normaliseDate(shift.date) &&
+        String(row[4]||'').trim() === shift.jobType &&
+        String(row[5]||'').trim() === shift.location;
+    });
+
+    const getApplicants = (shift) => existingRows
+      .filter(row => {
+        const st = String(row[6]||'').toUpperCase();
+        return (st === 'PENDING' || st === 'BACKUP') &&
+          normaliseDate(String(row[3]||'').trim()) === normaliseDate(shift.date) &&
+          String(row[4]||'').trim() === shift.jobType &&
+          String(row[5]||'').trim() === shift.location;
+      })
+      .map(row => ({ name: String(row[2]||'').trim(), timestamp: String(row[0]||'').trim() }));
+
+    const normalShifts = shifts.filter(s => !isBackup(s));
+    const backupShifts = shifts.filter(s => isBackup(s));
+
+    const requestsToAdd = [
+      ...normalShifts.map(s => [timestamp, email, name, s.date, s.jobType, s.location, 'Pending', '', '']),
+      ...backupShifts.map(s => [timestamp, email, name, s.date, s.jobType, s.location, 'Backup', '', ''])
+    ];
+
     if (requestsToAdd.length > 0) {
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
@@ -408,7 +461,7 @@ async function requestShifts(email, name, shifts) {
         valueInputOption: 'RAW',
         resource: { values: requestsToAdd }
       });
-      console.log(`Logged ${requestsToAdd.length} requests to Requests sheet`);
+      console.log(`Logged ${requestsToAdd.length} requests (${normalShifts.length} pending, ${backupShifts.length} backup)`);
     }
 
     const shiftsByLocation = {};
@@ -446,6 +499,38 @@ async function requestShifts(email, name, shifts) {
       }
     }
 
+
+    // Send update emails for backup shifts (one per shift per officer location)
+    for (const shift of backupShifts) {
+      const officers = officersByLocation[shift.location] || [];
+      const existing = getApplicants(shift);
+      const allApplicants = [...existing, { name, timestamp }];
+      const tableRows = allApplicants.map((a, idx) =>
+        `<tr><td style="padding:6px 12px;">${idx + 1}.</td><td style="padding:6px 12px;">${a.name}</td><td style="padding:6px 12px;color:#666;">${a.timestamp || 'Just now'}</td></tr>`
+      ).join('');
+
+      for (const officer of officers) {
+        try {
+          await transporter.sendMail({
+            from: GMAIL_USER, to: officer.email, cc: GMAIL_USER,
+            subject: `[Rural Rosters] Update: ${normaliseDate(shift.date)} - ${shift.jobType} @ ${shift.location} now has multiple applicants`,
+            html: `<p>Dear ${officer.name},</p>
+<p>The following shift has been applied for by multiple staff members:</p>
+<p><strong>${normaliseDate(shift.date)} - ${shift.jobType} @ ${shift.location}</strong></p>
+<table style="border-collapse:collapse;margin:10px 0;">
+  <tr style="background:#f9f9f9;"><th style="padding:6px 12px;text-align:left;">#</th><th style="padding:6px 12px;text-align:left;">Applicant</th><th style="padding:6px 12px;text-align:left;">Applied</th></tr>
+  ${tableRows}
+</table>
+<p>Please log in to review all applicants and approve each one.</p>
+<p><a href="${FRONTEND_URL}" style="background:#2c3e50;color:white;padding:10px 20px;border-radius:4px;text-decoration:none;display:inline-block;margin:10px 0;">Open Rural Rosters</a></p>
+<p>Thank you,<br>Rural Rosters Support</p>`
+          });
+        } catch (emailErr) {
+          console.error('Backup shift email error:', emailErr.message);
+        }
+      }
+    }
+
     return { success: true, message: 'Request submitted and emails sent' };
   } catch (err) {
     console.error('requestShifts error:', err);
@@ -455,27 +540,100 @@ async function requestShifts(email, name, shifts) {
 
 async function approveShiftRequest(email, name, date, jobType, location, sendEmail = true) {
   try {
+    const resolvedTimestamp = new Date().toLocaleString();
     const requestsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Requests!A2:I'
+      spreadsheetId: SHEET_ID, range: 'Requests!A2:I'
     });
     const requestsRows = requestsResponse.data.values || [];
+
+    // 1. Approve the target row
     for (let i = 0; i < requestsRows.length; i++) {
-      if (requestsRows[i][1] === email && requestsRows[i][3] === date && requestsRows[i][4] === jobType && requestsRows[i][5] === location && requestsRows[i][6] === 'Pending') {
+      const st = String(requestsRows[i][6]||'').toUpperCase();
+      if (requestsRows[i][1] === email &&
+          normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date) &&
+          String(requestsRows[i][4]||'').trim() === jobType &&
+          String(requestsRows[i][5]||'').trim() === location &&
+          (st === 'PENDING' || st === 'BACKUP')) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `Requests!G${i + 2}`,
+          range: `Requests!G${i + 2}:I${i + 2}`,
           valueInputOption: 'RAW',
-          resource: { values: [['Approved']] }
+          resource: { values: [['Approved', '', resolvedTimestamp]] }
         });
         break;
       }
     }
+
+    // 2. Auto-deny all other Pending/Backup applicants for the same shift
+    const autoDeniedApplicants = [];
+    for (let i = 0; i < requestsRows.length; i++) {
+      const st = String(requestsRows[i][6]||'').toUpperCase();
+      if (requestsRows[i][1] !== email &&
+          normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date) &&
+          String(requestsRows[i][4]||'').trim() === jobType &&
+          String(requestsRows[i][5]||'').trim() === location &&
+          (st === 'PENDING' || st === 'BACKUP')) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Requests!G${i + 2}:I${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [['Auto-Denied', 'Approved for another applicant', resolvedTimestamp]] }
+        });
+        autoDeniedApplicants.push({
+          email: String(requestsRows[i][1]||'').trim(),
+          name: String(requestsRows[i][2]||'').trim()
+        });
+      }
+    }
+
+    // 3. Remove shift from Vacancies sheet
+    try {
+      const vacResp = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID, range: `Vacancies - ${location}!A2:D`
+      });
+      const vacRows = vacResp.data.values || [];
+      const filteredRows = vacRows.filter(row =>
+        !(normaliseDate(String(row[0]||'').trim()) === normaliseDate(date) &&
+          String(row[1]||'').trim() === jobType)
+      );
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SHEET_ID, range: `Vacancies - ${location}!A2:D`
+      });
+      if (filteredRows.length > 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID, range: `Vacancies - ${location}!A2:D`,
+          valueInputOption: 'RAW', resource: { values: filteredRows }
+        });
+      }
+      console.log(`Removed approved shift from Vacancies - ${location}: ${date} ${jobType}`);
+    } catch (vacErr) {
+      console.error('approveShiftRequest vacancy removal error:', vacErr.message);
+    }
+
+    // 4. Send auto-denial emails to other applicants
+    for (const applicant of autoDeniedApplicants) {
+      try {
+        await transporter.sendMail({
+          from: GMAIL_USER, to: applicant.email, cc: GMAIL_USER,
+          subject: `[Rural Rosters] Shift ${date} - ${jobType} @ ${location} has been filled`,
+          html: `<p>Dear ${applicant.name},</p>
+<p>Thank you for applying for the following shift:</p>
+<p><strong>${date} - ${jobType} @ ${location}</strong></p>
+<p>This shift has been approved for another staff member. Your application has been automatically closed.</p>
+<p>Thank you for your interest and availability.</p>
+<p>Kind regards,<br>Rural Rosters Support</p>`
+        });
+      } catch (emailErr) {
+        console.error(`Auto-denial email error for ${applicant.email}:`, emailErr.message);
+      }
+    }
+
+    // 5. Send approval email with ICS to the approved person
     if (sendEmail) {
       const times = await getShiftTimes(location, jobType);
       const icsContent = generateICS(date, jobType, location, times.start, times.end, `${jobType} @ ${location} — Approved`);
       const mailOptions = {
-        from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
+        from: GMAIL_USER, to: email, cc: GMAIL_USER,
         subject: `[Rural Rosters] Your Shift Request Approved`,
         html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>A calendar event is attached — tap it to add the shift to your calendar.</p><p>Thank you,<br>Rural Rosters Support</p>`
       };
@@ -488,7 +646,7 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
       }
       await transporter.sendMail(mailOptions);
     }
-    return { success: true };
+    return { success: true, autoDenied: autoDeniedApplicants.length };
   } catch (err) {
     console.error('approveShiftRequest error:', err);
     return { error: err.toString() };
@@ -503,19 +661,24 @@ async function denyShiftRequest(email, name, date, jobType, location, sendEmail 
     });
     const requestsRows = requestsResponse.data.values || [];
     for (let i = 0; i < requestsRows.length; i++) {
-      if (requestsRows[i][1] === email && requestsRows[i][3] === date && requestsRows[i][4] === jobType && requestsRows[i][5] === location && requestsRows[i][6] === 'Pending') {
+      const dSt = String(requestsRows[i][6]||'').toUpperCase();
+      if (requestsRows[i][1] === email &&
+          normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date) &&
+          String(requestsRows[i][4]||'').trim() === jobType &&
+          String(requestsRows[i][5]||'').trim() === location &&
+          (dSt === 'PENDING' || dSt === 'BACKUP')) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `Requests!G${i + 2}`,
+          range: `Requests!G${i + 2}:I${i + 2}`,
           valueInputOption: 'RAW',
-          resource: { values: [['Denied']] }
+          resource: { values: [['Denied', '', new Date().toLocaleString()]] }
         });
         break;
       }
     }
     if (sendEmail) {
       await transporter.sendMail({
-        from: GMAIL_USER, to: email, cc: 'ruralroster@gmail.com',
+        from: GMAIL_USER, to: email, cc: GMAIL_USER,
         subject: `[Rural Rosters] Your Shift Request Denied`,
         html: `<p>Dear ${name},</p><p>Your shift request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
       });
@@ -716,9 +879,11 @@ async function getOfficerPendingApprovals(email) {
   }
 
   for (let i = 0; i < requestsRows.length; i++) {
-    if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && requestsRows[i][6] && String(requestsRows[i][6]).toUpperCase() === 'PENDING') {
+    const reqSt = String(requestsRows[i][6]||'').toUpperCase();
+    if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (reqSt === 'PENDING' || reqSt === 'BACKUP')) {
       claims.push({
         type: 'shift_request',
+        requestStatus: String(requestsRows[i][6]||'').trim(),
         claimingEmail: requestsRows[i][1], claimingName: requestsRows[i][2],
         date: requestsRows[i][3], jobType: requestsRows[i][4], location: requestsRows[i][5],
         claimedTimestamp: requestsRows[i][0]
@@ -768,17 +933,19 @@ async function getOfficerPastApprovals(email) {
     const requestsRows = requestsResponse.data.values || [];
     for (let i = 0; i < requestsRows.length; i++) {
       const status = String(requestsRows[i][6] || '').trim().toUpperCase();
-      if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (status === 'APPROVED' || status === 'DENIED')) {
+      if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (status === 'APPROVED' || status === 'DENIED' || status === 'AUTO-DENIED')) {
         const shiftKey = requestsRows[i][3] + '|' + requestsRows[i][4] + '|' + requestsRows[i][5];
         if (!pastApprovals[shiftKey]) {
-          pastApprovals[shiftKey] = { date: requestsRows[i][3], jobType: requestsRows[i][4], location: requestsRows[i][5], approved: null, denied: [], resolvedDate: null };
+          pastApprovals[shiftKey] = { date: requestsRows[i][3], jobType: requestsRows[i][4], location: requestsRows[i][5], approved: null, denied: [], autoDenied: [], resolvedDate: null };
         }
         if (status === 'APPROVED') {
           pastApprovals[shiftKey].approved = { email: requestsRows[i][1], name: requestsRows[i][2] };
-          pastApprovals[shiftKey].resolvedDate = requestsRows[i][7] || requestsRows[i][0];
+          pastApprovals[shiftKey].resolvedDate = requestsRows[i][8] || requestsRows[i][0];
+        } else if (status === 'AUTO-DENIED') {
+          pastApprovals[shiftKey].autoDenied.push({ email: requestsRows[i][1], name: requestsRows[i][2], timestamp: requestsRows[i][0] });
         } else {
           pastApprovals[shiftKey].denied.push({ email: requestsRows[i][1], name: requestsRows[i][2] });
-          pastApprovals[shiftKey].resolvedDate = requestsRows[i][7] || requestsRows[i][0];
+          pastApprovals[shiftKey].resolvedDate = requestsRows[i][8] || requestsRows[i][0];
         }
       }
     }
@@ -1539,6 +1706,111 @@ async function getShiftTypesForOfficer(email) {
   } catch (err) {
     console.error('getShiftTypesForOfficer error:', err);
     return { types: [], astOptions: ['None', 'Emergency', 'Anaesthetics', 'O&G'] };
+  }
+}
+
+
+async function checkShiftApplicants(shifts) {
+  // Returns which of the provided shifts already have Pending/Backup applicants
+  try {
+    const reqResp = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID, range: 'Requests!A2:G'
+    });
+    const rows = reqResp.data.values || [];
+    return shifts.map(s => {
+      const hasPending = rows.some(row => {
+        const st = String(row[6]||'').toUpperCase();
+        return (st === 'PENDING' || st === 'BACKUP') &&
+          normaliseDate(String(row[3]||'').trim()) === normaliseDate(s.date) &&
+          String(row[4]||'').trim() === s.jobType &&
+          String(row[5]||'').trim() === s.location;
+      });
+      return { ...s, hasPendingApplicants: hasPending };
+    });
+  } catch (err) {
+    console.error('checkShiftApplicants error:', err);
+    return shifts.map(s => ({ ...s, hasPendingApplicants: false }));
+  }
+}
+
+async function reofferShift(officerEmail, officerName, staffEmail, staffName, date, jobType, location) {
+  try {
+    // Look up who was previously approved for this shift
+    const reqResp = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID, range: 'Requests!A2:I'
+    });
+    const rows = reqResp.data.values || [];
+    let withdrawnName = 'the previous applicant';
+    for (const row of rows) {
+      if (String(row[6]||'').toUpperCase() === 'APPROVED' &&
+          normaliseDate(String(row[3]||'').trim()) === normaliseDate(date) &&
+          String(row[4]||'').trim() === jobType &&
+          String(row[5]||'').trim() === location) {
+        withdrawnName = String(row[2]||'').trim() || withdrawnName;
+        break;
+      }
+    }
+
+    // Generate ICS for the shift
+    const times = await getShiftTimes(location, jobType);
+    const icsContent = generateICS(date, jobType, location, times.start, times.end, `${jobType} @ ${location}`);
+
+    const shiftLabel = `${date} - ${jobType} @ ${location}`;
+    const reapplyBody = encodeURIComponent(
+      `Dear ${officerName},
+
+Thank you for offering me this shift.
+
+I am happy to cover:
+${shiftLabel}
+
+Sincerely,
+${staffName}`
+    );
+    const declineBody = encodeURIComponent(
+      `Dear ${officerName},
+
+Thank you for thinking of me for this shift. Unfortunately, I am no longer able to cover:
+${shiftLabel}
+
+Sincerely,
+${staffName}`
+    );
+    const reapplyLink = `mailto:${officerEmail}?subject=Re-Apply%3A%20${encodeURIComponent(shiftLabel)}&body=${reapplyBody}`;
+    const declineLink = `mailto:${officerEmail}?subject=Unable%20to%20Cover%3A%20${encodeURIComponent(shiftLabel)}&body=${declineBody}`;
+
+    const mailOptions = {
+      from: GMAIL_USER,
+      to: staffEmail,
+      cc: GMAIL_USER,
+      subject: `[Rural Rosters] Shift Re-offer: ${shiftLabel}`,
+      html: `<p>Dear ${staffName},</p>
+<p>The previous applicant for the following shift:</p>
+<p><strong>${shiftLabel}</strong></p>
+<p><strong>${withdrawnName}</strong> has withdrawn their application.</p>
+<p>If you are still able to take this shift and are happy to do so, please use the button below:</p>
+<p>
+  <a href="${reapplyLink}" style="background:#28a745;color:white;padding:12px 24px;border-radius:4px;text-decoration:none;display:inline-block;margin:8px 4px;">Re-Apply for Shift</a>
+  <a href="${declineLink}" style="background:#dc3545;color:white;padding:12px 24px;border-radius:4px;text-decoration:none;display:inline-block;margin:8px 4px;">I Can No Longer Cover This Shift</a>
+</p>
+<p style="color:#666;font-size:13px;">These buttons will open a pre-filled email in your email app addressed to ${officerName}.</p>
+<p>Thank you,<br>Rural Rosters Support</p>`
+    };
+
+    if (icsContent) {
+      mailOptions.attachments = [{
+        filename: `shift-${date.replace(/\//g,'-')}.ics`,
+        content: icsContent,
+        contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+      }];
+    }
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Re-offer email sent to ${staffEmail} for ${shiftLabel}`);
+    return { success: true };
+  } catch (err) {
+    console.error('reofferShift error:', err);
+    return { error: err.toString() };
   }
 }
 
