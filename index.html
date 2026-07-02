@@ -718,8 +718,14 @@
         callBackend('approveShiftRequest', {
             email, name, date, jobType, location, sendEmail
         }).then(result => {
-            if (result.error) showMessage(result.error, 'error');
-            else { showMessage('✓ Shift request approved', 'success'); loadOfficerApprovals(); }
+            if (result.error) {
+                showMessage(result.error, 'error');
+            } else {
+                const denied = result.autoDenied || 0;
+                showMessage(`✓ Shift request approved${denied > 0 ? ' — ' + denied + ' backup applicant(s) auto-denied' : ''}`, 'success');
+                // Small delay to allow Google Sheets writes to propagate before re-read
+                setTimeout(() => { loadOfficerApprovals(); refreshPendingBanner(); }, 800);
+            }
         });
     }
 
