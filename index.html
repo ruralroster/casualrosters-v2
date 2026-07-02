@@ -1656,6 +1656,8 @@
         userRole = null;
         userLocations = [];
         userQuals = ['Emergency'];
+        const banner = document.getElementById('pendingBanner');
+        if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
         document.getElementById('mainDashboard').style.display = 'none';
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('emailInput').value = '';
