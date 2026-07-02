@@ -593,10 +593,13 @@
                     const isProposal = claim.type === 'swap_proposal';
                     const isSwap = claim.type === 'swap_claim';
                     const isBackupApp = !isProposal && !isSwap && claim.requestStatus && claim.requestStatus.toUpperCase() === 'BACKUP';
+                    const isReoffered = !isProposal && !isSwap && claim.requestStatus && claim.requestStatus.toUpperCase() === 'RE-OFFERED';
                     const typeBadge = isProposal
                         ? `<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP PROPOSAL</span>`
                         : isSwap
                         ? `<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP CLAIM</span>`
+                        : isReoffered
+                        ? `<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">RE-OFFERED</span>`
                         : isBackupApp
                         ? `<span style="background: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">BACKUP</span>`
                         : `<span style="background: #cfe2ff; color: #084298; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SHIFT REQUEST</span>`;
@@ -687,8 +690,12 @@
             officerName: currentUser.name,
             staffEmail, staffName, date, jobType, location
         }).then(result => {
-            if (result.error) showMessage('Error: ' + result.error, 'error');
-            else showMessage('\u2713 Re-offer email sent to ' + staffName, 'success');
+            if (result.error) {
+                showMessage('Error: ' + result.error, 'error');
+            } else {
+                showMessage('\u2713 Re-offer sent to ' + staffName + ' \u2014 request moved to Outstanding Cover Requests', 'success');
+                loadOfficerApprovals(); // Refreshes both Outstanding and Past sections
+            }
         });
     }
 
