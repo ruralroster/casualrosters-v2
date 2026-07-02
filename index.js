@@ -28,6 +28,10 @@ const GMAIL_APP_PASSWORD = 'gckg msat pnzq ltug';
 // STAGING Sheet ID
 const SHEET_ID = '1VPj0f0KPisbr3zTexse_FFsCw4lGMIQCLzMOkEPc6dw';
 const FRONTEND_URL = 'https://ruralroster.github.io/casualrosters-v2/';
+const BRISBANE_TZ = 'Australia/Brisbane';
+const brisTime = () => new Date().toLocaleString('en-AU', { timeZone: BRISBANE_TZ, hour12: true,
+  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const SIGN_OFF = '<p style="margin-top:16px;">Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>';
 
 console.log('[INIT] Starting backend initialization...');
 
@@ -406,7 +410,7 @@ async function saveOfficerVacancies(email, vacancies) {
 // Fix: includes mailto Approve/Deny buttons in officer notification emails (restored from V1)
 async function requestShifts(email, name, shifts) {
   try {
-    const timestamp = new Date().toLocaleString();
+    const timestamp = brisTime();
     console.log(`Shift request from ${name} (${email}) for ${shifts.length} shifts`);
 
     const officerResult = await sheets.spreadsheets.values.get({
@@ -481,7 +485,7 @@ async function requestShifts(email, name, shifts) {
 <p><strong>${shiftList}</strong></p>
 <p>Please log in to Rural Rosters to approve or deny this request:</p>
 <p><a href="${FRONTEND_URL}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Log in to Rural Rosters</a></p>
-<p>Thank you,<br>Rural Rosters Support</p>`;
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`;
 
       for (let officer of officers) {
         try {
@@ -521,9 +525,9 @@ async function requestShifts(email, name, shifts) {
   <tr style="background:#f9f9f9;"><th style="padding:6px 12px;text-align:left;">#</th><th style="padding:6px 12px;text-align:left;">Applicant</th><th style="padding:6px 12px;text-align:left;">Applied</th></tr>
   ${tableRows}
 </table>
-<p>Please log in to review all applicants and approve each one.</p>
+<p>Please log in to review all applicants and approve or deny each one.</p>
 <p><a href="${FRONTEND_URL}" style="background:#2c3e50;color:white;padding:10px 20px;border-radius:4px;text-decoration:none;display:inline-block;margin:10px 0;">Open Rural Rosters</a></p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
           });
         } catch (emailErr) {
           console.error('Backup shift email error:', emailErr.message);
@@ -540,7 +544,7 @@ async function requestShifts(email, name, shifts) {
 
 async function approveShiftRequest(email, name, date, jobType, location, sendEmail = true) {
   try {
-    const resolvedTimestamp = new Date().toLocaleString();
+    const resolvedTimestamp = brisTime();
     const requestsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID, range: 'Requests!A2:I'
     });
@@ -553,7 +557,7 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
           normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date) &&
           String(requestsRows[i][4]||'').trim() === jobType &&
           String(requestsRows[i][5]||'').trim() === location &&
-          (st === 'PENDING' || st === 'BACKUP')) {
+          (st === 'PENDING' || st === 'BACKUP' || st === 'RE-OFFERED')) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
           range: `Requests!G${i + 2}:I${i + 2}`,
@@ -564,7 +568,7 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
       }
     }
 
-    // 2. Auto-deny all other Pending/Backup applicants for the same shift
+    // 2. Auto-deny all other Pending/Backup/Re-offered applicants for the same shift
     const autoDeniedApplicants = [];
     for (let i = 0; i < requestsRows.length; i++) {
       const st = String(requestsRows[i][6]||'').toUpperCase();
@@ -572,7 +576,7 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
           normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date) &&
           String(requestsRows[i][4]||'').trim() === jobType &&
           String(requestsRows[i][5]||'').trim() === location &&
-          (st === 'PENDING' || st === 'BACKUP')) {
+          (st === 'PENDING' || st === 'BACKUP' || st === 'RE-OFFERED')) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
           range: `Requests!G${i + 2}:I${i + 2}`,
@@ -621,7 +625,7 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
 <p><strong>${date} - ${jobType} @ ${location}</strong></p>
 <p>This shift has been approved for another staff member. Your application has been automatically closed.</p>
 <p>Thank you for your interest and availability.</p>
-<p>Kind regards,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
         });
       } catch (emailErr) {
         console.error(`Auto-denial email error for ${applicant.email}:`, emailErr.message);
@@ -635,7 +639,7 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
       const mailOptions = {
         from: GMAIL_USER, to: email, cc: GMAIL_USER,
         subject: `[Rural Rosters] Your Shift Request Approved`,
-        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>A calendar event is attached — tap it to add the shift to your calendar.</p><p>Thank you,<br>Rural Rosters Support</p>`
+        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>APPROVED</strong>!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>A calendar event is attached — tap it to add the shift to your calendar.</p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       };
       if (icsContent) {
         mailOptions.attachments = [{
@@ -666,12 +670,12 @@ async function denyShiftRequest(email, name, date, jobType, location, sendEmail 
           normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date) &&
           String(requestsRows[i][4]||'').trim() === jobType &&
           String(requestsRows[i][5]||'').trim() === location &&
-          (dSt === 'PENDING' || dSt === 'BACKUP')) {
+          (dSt === 'PENDING' || dSt === 'BACKUP' || dSt === 'RE-OFFERED')) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
           range: `Requests!G${i + 2}:I${i + 2}`,
           valueInputOption: 'RAW',
-          resource: { values: [['Denied', '', new Date().toLocaleString()]] }
+          resource: { values: [['Denied', '', brisTime()]] }
         });
         break;
       }
@@ -680,7 +684,7 @@ async function denyShiftRequest(email, name, date, jobType, location, sendEmail 
       await transporter.sendMail({
         from: GMAIL_USER, to: email, cc: GMAIL_USER,
         subject: `[Rural Rosters] Your Shift Request Denied`,
-        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
+        html: `<p>Dear ${name},</p><p>Your shift request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       });
     }
     return { success: true };
@@ -729,7 +733,7 @@ async function listShiftForSwap(email, name, date, jobType, location, isServiceD
 </table>
 <p>Please log in to review and approve or deny this swap request.</p>
 <p><a href="${FRONTEND_URL}" style="background:#2c3e50;color:white;padding:10px 20px;border-radius:4px;text-decoration:none;display:inline-block;margin:10px 0;">Open Rural Rosters</a></p>
-<p>Thank you,<br>Rural Rosters Support</p>`;
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`;
 
       if (officers.length > 0) {
         for (let officer of officers) {
@@ -793,7 +797,7 @@ async function getMarketplaceListings(email) {
 
 async function claimShift(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location) {
   try {
-    const timestamp = new Date().toLocaleString();
+    const timestamp = brisTime();
     const claimRow = [claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, timestamp, 'Pending'];
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
@@ -811,7 +815,7 @@ async function claimShift(claimingEmail, claimingName, originalEmail, originalNa
         await transporter.sendMail({
           from: GMAIL_USER, to: String(row[2]).trim(), cc: 'ruralroster@gmail.com',
           subject: `[Rural Rosters] Shift Swap Claim - ${claimingName} claiming from ${originalName}`,
-          html: `<p>Dear ${String(row[1]).trim()},</p><p><strong>${claimingName}</strong> has claimed a shift from <strong>${originalName}</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please log in to Rural Rosters to review this request:</p><p><a href="${FRONTEND_URL}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Log in to Rural Rosters</a></p><p>Thank you,<br>Rural Rosters Support</p>`
+          html: `<p>Dear ${String(row[1]).trim()},</p><p><strong>${claimingName}</strong> has claimed a shift from <strong>${originalName}</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please log in to Rural Rosters to review this request:</p><p><a href="${FRONTEND_URL}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Log in to Rural Rosters</a></p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
         });
         break;
       }
@@ -880,7 +884,7 @@ async function getOfficerPendingApprovals(email) {
 
   for (let i = 0; i < requestsRows.length; i++) {
     const reqSt = String(requestsRows[i][6]||'').toUpperCase();
-    if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (reqSt === 'PENDING' || reqSt === 'BACKUP')) {
+    if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (reqSt === 'PENDING' || reqSt === 'BACKUP' || reqSt === 'RE-OFFERED')) {
       claims.push({
         type: 'shift_request',
         requestStatus: String(requestsRows[i][6]||'').trim(),
@@ -961,7 +965,7 @@ async function getOfficerPastApprovals(email) {
 
 async function approveSwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location, sendEmail = true) {
   try {
-    const resolvedTimestamp = new Date().toLocaleString();
+    const resolvedTimestamp = brisTime();
     const claimsResult = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Marketplace Claims!A2:J'
@@ -995,7 +999,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
       await transporter.sendMail({
         from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: `[Rural Rosters] Your Shift Request Approved`,
-        html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
+        html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       });
     }
 
@@ -1004,14 +1008,14 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
         await transporter.sendMail({
           from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
           subject: `[Rural Rosters] Shift Swap Approved`,
-          html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Original staff member: ${originalName}</p><p>Please coordinate with ${originalName} to confirm the handover.</p><p>Thank you,<br>Rural Rosters Support</p>`
+          html: `<p>Dear ${claimingName},</p><p>Your request to cover the shift has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Original staff member: ${originalName}</p><p>Please coordinate with ${originalName} to confirm the handover.</p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
         });
       }
       if (originalEmail && originalEmail.trim()) {
         await transporter.sendMail({
           from: GMAIL_USER, to: originalEmail, cc: 'ruralroster@gmail.com',
           subject: `[Rural Rosters] Your Shift Swap Approved`,
-          html: `<p>Dear ${originalName},</p><p>Your shift swap request has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Staff member taking your shift: ${claimingName}</p><p>Thank you,<br>Rural Rosters Support</p>`
+          html: `<p>Dear ${originalName},</p><p>Your shift swap request has been <strong>APPROVED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Staff member taking your shift: ${claimingName}</p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
         });
       }
       for (let applicant of otherApplicants) {
@@ -1019,7 +1023,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
           await transporter.sendMail({
             from: GMAIL_USER, to: applicant.email, cc: 'ruralroster@gmail.com',
             subject: `[Rural Rosters] Shift Swap - Another Applicant Approved`,
-            html: `<p>Dear ${applicant.name},</p><p>Unfortunately, another applicant was approved for the following shift:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please try again for future shifts.</p><p>Thank you,<br>Rural Rosters Support</p>`
+            html: `<p>Dear ${applicant.name},</p><p>Unfortunately, another applicant was approved for the following shift:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Please try again for future shifts.</p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
           });
         }
       }
@@ -1034,7 +1038,7 @@ async function approveSwap(claimingEmail, claimingName, originalEmail, originalN
 
 async function denySwap(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location, sendEmail = true) {
   try {
-    const resolvedTimestamp = new Date().toLocaleString();
+    const resolvedTimestamp = brisTime();
     const claimsResult = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Marketplace Claims!A2:J'
@@ -1059,8 +1063,8 @@ async function denySwap(claimingEmail, claimingName, originalEmail, originalName
         from: GMAIL_USER, to: claimingEmail, cc: 'ruralroster@gmail.com',
         subject: isSwap ? `[Rural Rosters] Shift Swap Not Approved` : `[Rural Rosters] Your Shift Request Denied`,
         html: isSwap
-          ? `<p>Dear ${claimingName},</p><p>Unfortunately, your request to cover the shift has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
-          : `<p>Dear ${claimingName},</p><p>Unfortunately, your shift request has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Thank you,<br>Rural Rosters Support</p>`
+          ? `<p>Dear ${claimingName},</p><p>Unfortunately, your request to cover the shift has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
+          : `<p>Dear ${claimingName},</p><p>Unfortunately, your shift request has been <strong>DENIED</strong>:</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       });
     }
 
@@ -1094,7 +1098,7 @@ async function approvePendingSwap(staffEmail, staffName, date, jobType, location
     await transporter.sendMail({
       from: GMAIL_USER, to: staffEmail, cc: 'ruralroster@gmail.com',
       subject: `[Rural Rosters] Your Swap Approved`,
-      html: `<p>Dear ${staffName},</p><p>Your swap request has been approved and is now live on the marketplace!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Available days/shifts: ${availableDays}</p><p>Thank you,<br>Rural Rosters Support</p>`
+      html: `<p>Dear ${staffName},</p><p>Your swap request has been approved and is now live on the marketplace!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Available days/shifts: ${availableDays}</p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
     });
     return { success: true, message: 'Swap approved and moved to marketplace' };
   } catch (err) {
@@ -1124,7 +1128,7 @@ async function denySwapWithReason(staffEmail, staffName, date, jobType, location
     await transporter.sendMail({
       from: GMAIL_USER, to: staffEmail, cc: 'ruralroster@gmail.com',
       subject: `[Rural Rosters] Your Swap Request Denied`,
-      html: `<p>Dear ${staffName},</p><p>Your shift swap request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p><strong>Reason:</strong> ${reason}</p><p>Thank you,<br>Rural Rosters Support</p>`
+      html: `<p>Dear ${staffName},</p><p>Your shift swap request has been <strong>DENIED</strong>.</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p><strong>Reason:</strong> ${reason}</p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
     });
     return { success: true, message: 'Swap denied and email sent' };
   } catch (err) {
@@ -1142,7 +1146,7 @@ async function denySwapWithReason(staffEmail, staffName, date, jobType, location
 // Columns: A-J existing, K=offeredDate, L=offeredJobType, M='swap_proposal'
 async function proposeSwap(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, offeredDate, offeredJobType) {
   try {
-    const timestamp = new Date().toLocaleString();
+    const timestamp = brisTime();
     // Normalise both dates to DD/MM/YYYY before storing
     const normDate = normaliseDate(date);
     const normOfferedDate = normaliseDate(offeredDate);
@@ -1180,7 +1184,7 @@ async function proposeSwap(claimingEmail, claimingName, originalEmail, originalN
 </table>
 <p>Please log in to Rural Rosters to approve or deny this proposal:</p>
 <p><a href="${FRONTEND_URL}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Log in to Rural Rosters</a></p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
         });
         break;
       }
@@ -1195,7 +1199,7 @@ async function proposeSwap(claimingEmail, claimingName, originalEmail, originalN
 
 async function approveSwapProposal(claimingEmail, claimingName, originalEmail, originalName, officerEmail, officerName, date, jobType, location, offeredDate, offeredJobType, sendEmail = true) {
   try {
-    const resolvedTimestamp = new Date().toLocaleString();
+    const resolvedTimestamp = brisTime();
 
     // Update status in Marketplace Claims
     const claimsResult = await sheets.spreadsheets.values.get({
@@ -1237,7 +1241,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
 </table>
 <p>A calendar event is attached for your new shift — tap it to add to your calendar.</p>
 <p>Please coordinate with ${originalName} to confirm the handover.</p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       };
       if (icsB) mailB.attachments = [{ filename: `shift-${date.replace(/\//g,'-')}.ics`, content: icsB, contentType: 'text/calendar; charset=utf-8; method=REQUEST' }];
       await transporter.sendMail(mailB);
@@ -1258,7 +1262,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
 </table>
 <p>A calendar event is attached for your new shift — tap it to add to your calendar.</p>
 <p>Please coordinate with ${claimingName} to confirm the handover.</p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       };
       if (icsA) mailA.attachments = [{ filename: `shift-${offeredDate.replace(/\//g,'-')}.ics`, content: icsA, contentType: 'text/calendar; charset=utf-8; method=REQUEST' }];
       await transporter.sendMail(mailA);
@@ -1273,7 +1277,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
 
 async function denySwapProposal(claimingEmail, claimingName, officerEmail, officerName, date, jobType, location, sendEmail = true) {
   try {
-    const resolvedTimestamp = new Date().toLocaleString();
+    const resolvedTimestamp = brisTime();
 
     const claimsResult = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
@@ -1307,7 +1311,7 @@ async function denySwapProposal(claimingEmail, claimingName, officerEmail, offic
         html: `<p>Dear ${claimingName},</p>
 <p>Your proposed shift swap for <strong>${date} - ${jobType} @ ${location}</strong> has not been approved by your rostering officer.</p>
 <p>Please contact your rostering officer directly if you would like further details.</p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       });
     }
 
@@ -1429,7 +1433,7 @@ async function removeFromMarketplace(staffEmail, staffName, date, jobType, locat
 <p>Your shift listed for swap has been removed from the marketplace by your rostering officer:</p>
 <p><strong>${date} - ${jobType} @ ${location}</strong></p>
 <p>Please contact your rostering officer directly for further details.</p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
     });
     return { success: true, message: 'Listing pulled back and staff notified' };
   } catch (err) {
@@ -1440,7 +1444,7 @@ async function removeFromMarketplace(staffEmail, staffName, date, jobType, locat
 
 async function denySwapProposalWithReason(claimingEmail, claimingName, date, jobType, location, reason) {
   try {
-    const resolvedTimestamp = new Date().toLocaleString();
+    const resolvedTimestamp = brisTime();
     const claimsResult = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Marketplace Claims!A2:M'
@@ -1471,7 +1475,7 @@ async function denySwapProposalWithReason(claimingEmail, claimingName, date, job
 <p>Your proposed shift swap for <strong>${date} - ${jobType} @ ${location}</strong> has not been approved.</p>
 <p><strong>Reason:</strong> ${reason}</p>
 <p>Please contact your rostering officer if you have any questions.</p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
     });
     return { success: true, message: 'Swap proposal denied and staff notified' };
   } catch (err) {
@@ -1794,7 +1798,7 @@ ${staffName}`
   <a href="${declineLink}" style="background:#dc3545;color:white;padding:12px 24px;border-radius:4px;text-decoration:none;display:inline-block;margin:8px 4px;">I Can No Longer Cover This Shift</a>
 </p>
 <p style="color:#666;font-size:13px;">These buttons will open a pre-filled email in your email app addressed to ${officerName}.</p>
-<p>Thank you,<br>Rural Rosters Support</p>`
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
     };
 
     if (icsContent) {
@@ -1803,6 +1807,28 @@ ${staffName}`
         content: icsContent,
         contentType: 'text/calendar; charset=utf-8; method=REQUEST'
       }];
+    }
+
+    // Update Auto-Denied row to Re-offered so it reappears in Outstanding Requests
+    const reqRows = (await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID, range: 'Requests!A2:G'
+    })).data.values || [];
+    for (let i = 0; i < reqRows.length; i++) {
+      const st = String(reqRows[i][6]||'').toUpperCase();
+      if (st === 'AUTO-DENIED' &&
+          reqRows[i][1] === staffEmail &&
+          normaliseDate(String(reqRows[i][3]||'').trim()) === normaliseDate(date) &&
+          String(reqRows[i][4]||'').trim() === jobType &&
+          String(reqRows[i][5]||'').trim() === location) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Requests!G${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [['Re-offered']] }
+        });
+        console.log(`Status updated to Re-offered for ${staffEmail}`);
+        break;
+      }
     }
 
     await transporter.sendMail(mailOptions);
