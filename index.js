@@ -568,45 +568,36 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
       }
     }
 
-    // 2. Re-read sheet fresh after approval write, then auto-deny all other applicants
-    const freshResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID, range: 'Requests!A2:I'
-    });
-    const freshRows = freshResponse.data.values || [];
-    console.log(`approveShiftRequest: ${freshRows.length} rows in Requests sheet for auto-deny scan`);
-
+    // 2. Auto-deny all other Pending/Backup/Re-offered applicants for the same shift
+    // Uses the original requestsRows read (pre-approval) which reliably has Backup rows
     const autoDeniedApplicants = [];
-    for (let i = 0; i < freshRows.length; i++) {
-      const st = String(freshRows[i][6]||'').toUpperCase();
-      const rowEmail = String(freshRows[i][1]||'').trim();
-      const rowDate = normaliseDate(String(freshRows[i][3]||'').trim());
-      const rowJobType = String(freshRows[i][4]||'').trim();
-      const rowLocation = String(freshRows[i][5]||'').trim();
-      const normDate = normaliseDate(date);
+    const normDate = normaliseDate(date);
+    for (let i = 0; i < requestsRows.length; i++) {
+      const st = String(requestsRows[i][6]||'').toUpperCase();
+      const rowEmail = String(requestsRows[i][1]||'').trim();
+      const rowDate = normaliseDate(String(requestsRows[i][3]||'').trim());
+      const rowJobType = String(requestsRows[i][4]||'').trim();
+      const rowLocation = String(requestsRows[i][5]||'').trim();
 
-      const isOtherApplicant = rowEmail !== email &&
-        rowDate === normDate &&
-        rowJobType === jobType &&
-        rowLocation === location &&
-        (st === 'PENDING' || st === 'BACKUP' || st === 'RE-OFFERED');
-
-      console.log(`Row ${i+2}: email=${rowEmail}, date=${rowDate}, job=${rowJobType}, loc=${rowLocation}, status=${st}, match=${isOtherApplicant}`);
-
-      if (isOtherApplicant) {
+      if (rowEmail !== email &&
+          rowDate === normDate &&
+          rowJobType === jobType &&
+          rowLocation === location &&
+          (st === 'PENDING' || st === 'BACKUP' || st === 'RE-OFFERED')) {
+        console.log(`Auto-denying row ${i+2}: ${requestsRows[i][2]} (${rowEmail}) status=${st}`);
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
           range: `Requests!G${i + 2}:I${i + 2}`,
           valueInputOption: 'RAW',
           resource: { values: [['Auto-Denied', 'Approved for another applicant', resolvedTimestamp]] }
         });
-        console.log(`Auto-denied row ${i+2}: ${freshRows[i][2]} (${rowEmail})`);
         autoDeniedApplicants.push({
           email: rowEmail,
-          name: String(freshRows[i][2]||'').trim()
+          name: String(requestsRows[i][2]||'').trim()
         });
       }
     }
-    console.log(`approveShiftRequest: auto-denied ${autoDeniedApplicants.length} applicant(s)`);
+    console.log(`approveShiftRequest: auto-denied ${autoDeniedApplicants.length} applicant(s) for ${date} ${jobType} @ ${location}`);
 
     // 3. Remove shift from Vacancies sheet
     try {
