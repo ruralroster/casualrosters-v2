@@ -891,8 +891,24 @@ async function getOfficerPendingApprovals(email) {
     }
   }
 
+  // Build set of shift keys that already have an APPROVED row.
+  // BACKUP rows for these shifts belong in Past, not Outstanding.
+  const approvedShiftKeys = new Set();
+  for (const row of requestsRows) {
+    if (String(row[6]||'').toUpperCase() === 'APPROVED') {
+      approvedShiftKeys.add(`${String(row[3]||'').trim()}|${String(row[4]||'').trim()}|${String(row[5]||'').trim()}`);
+    }
+  }
+
   for (let i = 0; i < requestsRows.length; i++) {
     const reqSt = String(requestsRows[i][6]||'').toUpperCase();
+    const shiftKey = `${String(requestsRows[i][3]||'').trim()}|${String(requestsRows[i][4]||'').trim()}|${String(requestsRows[i][5]||'').trim()}`;
+    const isBackup = reqSt === 'BACKUP';
+    const shiftAlreadyApproved = approvedShiftKeys.has(shiftKey);
+
+    // Skip BACKUP rows where the shift is already approved — they belong in Past Cover Requests
+    if (isBackup && shiftAlreadyApproved) continue;
+
     if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (reqSt === 'PENDING' || reqSt === 'BACKUP' || reqSt === 'RE-OFFERED')) {
       claims.push({
         type: 'shift_request',
@@ -944,9 +960,22 @@ async function getOfficerPastApprovals(email) {
       range: 'Requests!A2:I'
     });
     const requestsRows = requestsResponse.data.values || [];
+
+    // Build set of approved shift keys so BACKUP rows for those shifts appear in Past
+    const approvedShiftKeysPast = new Set();
+    for (const row of requestsRows) {
+      if (String(row[6]||'').toUpperCase() === 'APPROVED' &&
+          row[5] && locations.includes(String(row[5]).trim())) {
+        approvedShiftKeysPast.add(`${String(row[3]||'').trim()}|${String(row[4]||'').trim()}|${String(row[5]||'').trim()}`);
+      }
+    }
+
     for (let i = 0; i < requestsRows.length; i++) {
       const status = String(requestsRows[i][6] || '').trim().toUpperCase();
-      if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (status === 'APPROVED' || status === 'DENIED' || status === 'AUTO-DENIED')) {
+      // Also include BACKUP rows for shifts that have been approved — display as auto-denied
+      const shiftKey_pa = requestsRows[i][3] + '|' + requestsRows[i][4] + '|' + requestsRows[i][5];
+      const isBackupForApprovedShift = status === 'BACKUP' && approvedShiftKeysPast.has(shiftKey_pa);
+      if (requestsRows[i][5] && locations.includes(String(requestsRows[i][5]).trim()) && (status === 'APPROVED' || status === 'DENIED' || status === 'AUTO-DENIED' || isBackupForApprovedShift)) {
         const shiftKey = requestsRows[i][3] + '|' + requestsRows[i][4] + '|' + requestsRows[i][5];
         if (!pastApprovals[shiftKey]) {
           pastApprovals[shiftKey] = { date: requestsRows[i][3], jobType: requestsRows[i][4], location: requestsRows[i][5], approved: null, denied: [], autoDenied: [], resolvedDate: null };
@@ -954,7 +983,7 @@ async function getOfficerPastApprovals(email) {
         if (status === 'APPROVED') {
           pastApprovals[shiftKey].approved = { email: requestsRows[i][1], name: requestsRows[i][2] };
           pastApprovals[shiftKey].resolvedDate = requestsRows[i][8] || requestsRows[i][0];
-        } else if (status === 'AUTO-DENIED') {
+        } else if (status === 'AUTO-DENIED' || isBackupForApprovedShift) {
           pastApprovals[shiftKey].autoDenied.push({ email: requestsRows[i][1], name: requestsRows[i][2], timestamp: requestsRows[i][0] });
         } else {
           pastApprovals[shiftKey].denied.push({ email: requestsRows[i][1], name: requestsRows[i][2] });
