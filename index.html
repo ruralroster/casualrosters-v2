@@ -216,20 +216,8 @@
 
     const BACKEND_URL = 'https://ruralrostersproxy-staging-191282140713.australia-southeast1.run.app';
 
-    const LOCATIONS = ['Innisfail', 'Mareeba', 'Tully', 'Yarrabah', 'Atherton', 'Mossman', 'Babinda', 'Cairns', 'Telehealth', 'TestHub'];
-    const JOB_TYPES_BY_LOCATION = {
-        'Innisfail': ['Day', 'Night', 'RFDS'],
-        'Mareeba': ['Day', 'Night'],
-        'Tully': ['Day', 'Night'],
-        'Yarrabah': ['Day', 'Night'],
-        'Atherton': ['Day'],
-        'Mossman': ['Day'],
-        'Babinda': ['Day'],
-        'Cairns': ['Day', 'Night', 'RFDS'],
-        'Telehealth': ['Day'],
-        'TestHub': ['Day', 'Night', 'RFDS']
-    };
-    // AST qualification options — Emergency is always held, these are additional
+    // AST qualification options — fixed controlled vocabulary matching the Shift Types sheet
+    // Emergency is always held; these are the two additional qualifications
     const AST_QUALS = ['Anaesthetics', 'O&G'];
 
     let currentUser = null;
@@ -1247,12 +1235,19 @@
 
     function loadLocationCheckboxes() {
         const container = document.getElementById('locationList');
-        let html = '';
-        LOCATIONS.forEach(loc => {
-            const checked = userLocations.includes(loc) ? ' checked' : '';
-            html += `<div class="location-item"><input type="checkbox" id="loc-${loc}" value="${loc}"${checked}><label for="loc-${loc}">${loc}</label></div>`;
+        container.innerHTML = '<p style="color:#999;font-size:13px;">Loading locations...</p>';
+        callBackend('getAllLocations', {}).then(locations => {
+            if (!locations || locations.length === 0) {
+                container.innerHTML = '<p style="color:#999;font-size:13px;">No locations found.</p>';
+                return;
+            }
+            let html = '';
+            locations.forEach(loc => {
+                const checked = userLocations.includes(loc) ? ' checked' : '';
+                html += `<div class="location-item"><input type="checkbox" id="loc-${loc}" value="${loc}"${checked}><label for="loc-${loc}">${loc}</label></div>`;
+            });
+            container.innerHTML = html;
         });
-        container.innerHTML = html;
     }
 
     function loadASTCheckboxes() {
