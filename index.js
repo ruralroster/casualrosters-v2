@@ -118,6 +118,7 @@ const server = http.createServer((req, res) => {
         case 'reofferShift':               result = await reofferShift(params.officerEmail, params.officerName, params.staffEmail, params.staffName, params.date, params.jobType, params.location); break;
         case 'checkShiftApplicants':       result = await checkShiftApplicants(params.shifts); break;
         case 'getShiftTypesForOfficer':    result = await getShiftTypesForOfficer(params.email); break;
+        case 'getAllLocations':              result = await getAllLocations(); break;
         default: result = { error: 'Unknown action: ' + action };
       }
       res.writeHead(200);
@@ -1875,6 +1876,22 @@ ${staffName}`
   } catch (err) {
     console.error('reofferShift error:', err);
     return { error: err.toString() };
+  }
+}
+
+
+async function getAllLocations() {
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Rostering Officers!A2:A'
+    });
+    const rows = response.data.values || [];
+    const locations = [...new Set(rows.map(r => String(r[0]||'').trim()).filter(Boolean))].sort();
+    return locations;
+  } catch (err) {
+    console.error('getAllLocations error:', err.message);
+    return [];
   }
 }
 
