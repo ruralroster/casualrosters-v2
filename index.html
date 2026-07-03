@@ -1092,14 +1092,18 @@
     function updateSwapJobTypes() {
         const location = document.getElementById('swapLocation').value;
         const jobTypeSelect = document.getElementById('swapJobType');
-        const jobTypes = JOB_TYPES_BY_LOCATION[location] || [];
-
-        jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
-        jobTypes.forEach(jt => {
-            const opt = document.createElement('option');
-            opt.value = jt;
-            opt.textContent = jt;
-            jobTypeSelect.appendChild(opt);
+        if (!location) { jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>'; return; }
+        jobTypeSelect.innerHTML = '<option value="">Loading...</option>';
+        callBackend('getJobTypesForLocation', { location }).then(result => {
+            jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+            if (result.jobTypes) {
+                result.jobTypes.forEach(jt => {
+                    const opt = document.createElement('option');
+                    opt.value = jt;
+                    opt.textContent = jt;
+                    jobTypeSelect.appendChild(opt);
+                });
+            }
         });
     }
 
@@ -1415,15 +1419,19 @@
             ).join('');
         }
 
-        // Populate job type dropdown for Staff B's offered shift
-        const jobTypes = JOB_TYPES_BY_LOCATION[listing.location] || [];
+        // Populate job type dropdown for Staff B's offered shift from backend
         const select = document.getElementById('proposalJobType');
-        select.innerHTML = '<option value="">Select Job Type</option>';
-        jobTypes.forEach(jt => {
-            const opt = document.createElement('option');
-            opt.value = jt;
-            opt.textContent = jt;
-            select.appendChild(opt);
+        select.innerHTML = '<option value="">Loading...</option>';
+        callBackend('getJobTypesForLocation', { location: listing.location }).then(result => {
+            select.innerHTML = '<option value="">Select Job Type</option>';
+            if (result.jobTypes) {
+                result.jobTypes.forEach(jt => {
+                    const opt = document.createElement('option');
+                    opt.value = jt;
+                    opt.textContent = jt;
+                    select.appendChild(opt);
+                });
+            }
         });
 
         document.getElementById('proposalModal').classList.add('active');
