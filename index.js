@@ -1853,7 +1853,7 @@ ${staffName}`
     })).data.values || [];
     for (let i = 0; i < reqRows.length; i++) {
       const st = String(reqRows[i][6]||'').toUpperCase();
-      if (st === 'AUTO-DENIED' &&
+      if ((st === 'AUTO-DENIED' || st === 'BACKUP') &&
           reqRows[i][1] === staffEmail &&
           normaliseDate(String(reqRows[i][3]||'').trim()) === normaliseDate(date) &&
           String(reqRows[i][4]||'').trim() === jobType &&
