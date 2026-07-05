@@ -378,18 +378,21 @@
                     <h3>Settings</h3>
                     <div class="settings-section">
                         <h4>Work Location Preferences</h4>
-                        <div style="display:flex;gap:24px;margin-top:8px;">
-                            <div style="flex:1;">
-                                <p style="font-size:13px;font-weight:600;color:#2c6e6a;margin-bottom:8px;">Primary Workplace</p>
-                                <p style="font-size:12px;color:#666;margin-bottom:10px;">Where you are normally rostered. You can offer shifts from this location for swap.</p>
-                                <div id="primaryLocationList"></div>
-                            </div>
-                            <div style="flex:1;">
-                                <p style="font-size:13px;font-weight:600;color:#2c6e6a;margin-bottom:8px;">Cover Locations</p>
-                                <p style="font-size:12px;color:#666;margin-bottom:10px;">Locations where you can pick up extra shifts.</p>
-                                <div id="locationList"></div>
-                            </div>
-                        </div>
+                        <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px;text-align:center;padding:6px 4px;font-size:13px;font-weight:600;color:#2c6e6a;">Primary</th>
+                                    <th style="text-align:left;padding:6px 8px;font-size:13px;font-weight:600;color:#333;"></th>
+                                    <th style="width:40px;text-align:center;padding:6px 4px;font-size:13px;font-weight:600;color:#2c6e6a;">Cover</th>
+                                </tr>
+                                <tr>
+                                    <td style="text-align:center;padding:2px 4px 8px;font-size:11px;color:#666;">Swap</td>
+                                    <td></td>
+                                    <td style="text-align:center;padding:2px 4px 8px;font-size:11px;color:#666;">Extra shifts</td>
+                                </tr>
+                            </thead>
+                            <tbody id="locationTableBody"></tbody>
+                        </table>
                     </div>
                     <div class="settings-section">
                         <h4>AST Qualifications</h4>
@@ -1300,51 +1303,55 @@
     // ============================================================
 
     function loadLocationCheckboxes() {
-        const container = document.getElementById('locationList');
-        const primaryContainer = document.getElementById('primaryLocationList');
-        container.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
-        if (primaryContainer) primaryContainer.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
+        const tbody = document.getElementById('locationTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="3" style="color:#999;font-size:13px;padding:8px;">Loading...</td></tr>';
 
         callBackend('getAllLocations', {}).then(locations => {
             if (!locations || locations.length === 0) {
-                container.innerHTML = '<p style="color:#999;font-size:13px;">No locations found.</p>';
-                if (primaryContainer) primaryContainer.innerHTML = '';
+                tbody.innerHTML = '<tr><td colspan="3" style="color:#999;font-size:13px;padding:8px;">No locations found.</td></tr>';
                 return;
             }
-
-            // Cover locations — checkboxes
-            let coverHtml = '';
-            locations.forEach(loc => {
-                const checked = userLocations.includes(loc) ? ' checked' : '';
-                coverHtml += `<div class="location-item"><input type="checkbox" id="loc-${loc}" value="${loc}"${checked} onchange="onCoverLocationChange()"><label for="loc-${loc}">${loc}</label></div>`;
-            });
-            container.innerHTML = coverHtml;
-
-            // Primary locations — radio buttons (only locations in cover list)
-            if (primaryContainer) {
-                let primaryHtml = '';
-                locations.forEach(loc => {
-                    if (!userLocations.includes(loc)) return; // only show cover locations as primary options
-                    const checked = userPrimaryLocations.includes(loc) ? ' checked' : '';
-                    primaryHtml += `<div class="location-item"><input type="radio" name="primaryLoc" id="primary-${loc}" value="${loc}"${checked}><label for="primary-${loc}">${loc}</label></div>`;
-                });
-                primaryContainer.innerHTML = primaryHtml || '<p style="color:#999;font-size:13px;">Select cover locations first.</p>';
-            }
+            renderLocationTable(locations);
         });
     }
 
-    // Re-render primary radio buttons when cover checkboxes change
-    function onCoverLocationChange() {
-        const primaryContainer = document.getElementById('primaryLocationList');
-        if (!primaryContainer) return;
-        const checkedCovers = Array.from(document.querySelectorAll('#locationList input[type="checkbox"]:checked')).map(cb => cb.value);
-        const currentPrimary = document.querySelector('input[name="primaryLoc"]:checked')?.value || '';
+    function renderLocationTable(locations) {
+        const tbody = document.getElementById('locationTableBody');
+        if (!tbody) return;
         let html = '';
-        checkedCovers.forEach(loc => {
-            const checked = (loc === currentPrimary) ? ' checked' : '';
-            html += `<div class="location-item"><input type="radio" name="primaryLoc" id="primary-${loc}" value="${loc}"${checked}><label for="primary-${loc}">${loc}</label></div>`;
+        locations.forEach((loc, i) => {
+            const coverChecked = userLocations.includes(loc) ? ' checked' : '';
+            const primaryChecked = userPrimaryLocations.includes(loc) ? ' checked' : '';
+            // Primary radio only enabled when cover is ticked
+            const primaryDisabled = userLocations.includes(loc) ? '' : ' disabled';
+            const rowBg = i % 2 === 0 ? '' : 'background:#f9f9f9;';
+            html += `<tr style="${rowBg}">
+                <td style="text-align:center;padding:8px 4px;">
+                    <input type="radio" name="primaryLoc" id="primary-${loc}" value="${loc}"${primaryChecked}${primaryDisabled}>
+                </td>
+                <td style="padding:8px;font-size:14px;">
+                    <label for="loc-${loc}" style="margin:0;cursor:pointer;">${loc}</label>
+                </td>
+                <td style="text-align:center;padding:8px 4px;">
+                    <input type="checkbox" id="loc-${loc}" value="${loc}"${coverChecked} onchange="onCoverLocationChange('${loc}', this.checked)">
+                </td>
+            </tr>`;
         });
-        primaryContainer.innerHTML = html || '<p style="color:#999;font-size:13px;">Select cover locations first.</p>';
+        tbody.innerHTML = html;
+    }
+
+    // When a cover checkbox changes, enable/disable the corresponding primary radio
+    function onCoverLocationChange(loc, isChecked) {
+        const radio = document.getElementById('primary-' + loc);
+        if (!radio) return;
+        if (!isChecked) {
+            // If unchecking cover, clear primary if it was this location
+            if (radio.checked) radio.checked = false;
+            radio.disabled = true;
+        } else {
+            radio.disabled = false;
+        }
     }
 
     function loadASTCheckboxes() {
@@ -1364,7 +1371,7 @@
 
     // Fix: saves locations, primary location, and AST quals to backend
     function saveSettings() {
-        const locCheckboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
+        const locCheckboxes = document.querySelectorAll('#locationTableBody input[type="checkbox"]:checked');
         const astCheckboxes = document.querySelectorAll('#astList input[type="checkbox"]:checked');
         const primaryRadio = document.querySelector('input[name="primaryLoc"]:checked');
 
