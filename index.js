@@ -655,7 +655,7 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
         mailOptions.attachments = [{
           filename: `shift-${date.replace(/\//g,'-')}.ics`,
           content: icsContent,
-          contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+          contentType: 'text/calendar; charset=utf-8; method=PUBLISH'
         }];
       }
       await transporter.sendMail(mailOptions);
@@ -1282,7 +1282,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
 <p>Please coordinate with ${originalName} to confirm the handover.</p>
 <p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       };
-      if (icsB) mailB.attachments = [{ filename: `shift-${date.replace(/\//g,'-')}.ics`, content: icsB, contentType: 'text/calendar; charset=utf-8; method=REQUEST' }];
+      if (icsB) mailB.attachments = [{ filename: `shift-${date.replace(/\//g,'-')}.ics`, content: icsB, contentType: 'text/calendar; charset=utf-8; method=PUBLISH' }];
       await transporter.sendMail(mailB);
     }
 
@@ -1303,7 +1303,7 @@ async function approveSwapProposal(claimingEmail, claimingName, originalEmail, o
 <p>Please coordinate with ${claimingName} to confirm the handover.</p>
 <p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
       };
-      if (icsA) mailA.attachments = [{ filename: `shift-${offeredDate.replace(/\//g,'-')}.ics`, content: icsA, contentType: 'text/calendar; charset=utf-8; method=REQUEST' }];
+      if (icsA) mailA.attachments = [{ filename: `shift-${offeredDate.replace(/\//g,'-')}.ics`, content: icsA, contentType: 'text/calendar; charset=utf-8; method=PUBLISH' }];
       await transporter.sendMail(mailA);
     }
 
@@ -1844,7 +1844,7 @@ ${staffName}`
       mailOptions.attachments = [{
         filename: `shift-${date.replace(/\//g,'-')}.ics`,
         content: icsContent,
-        contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+        contentType: 'text/calendar; charset=utf-8; method=PUBLISH'
       }];
     }
 
@@ -1949,6 +1949,7 @@ function generateICS(date, jobType, location, startTime, endTime, summary) {
       'VERSION:2.0',
       'PRODID:-//Rural Rosters//CHHHS//EN',
       'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
       'BEGIN:VEVENT',
       `UID:${uid}`,
       `DTSTART;VALUE=DATE:${dtStart}`,
@@ -1967,6 +1968,7 @@ function generateICS(date, jobType, location, startTime, endTime, summary) {
     'VERSION:2.0',
     'PRODID:-//Rural Rosters//CHHHS//EN',
     'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTART:${dtStart}`,
