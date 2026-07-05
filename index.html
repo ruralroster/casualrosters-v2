@@ -633,43 +633,83 @@
             }
         }
 
-        html += '<h4>Past Cover Requests</h4>';
-        if (past.length === 0) {
-            html += '<p style="color: #999;">No resolved requests</p>';
-        } else {
-            past.forEach(item => {
-                const autoDenied = item.autoDenied || [];
-                html += `<div style="background:white;border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:12px;">
-                    <div style="font-weight:600;margin-bottom:8px;">${item.date} - ${item.jobType} @ ${item.location}</div>
-                    <div style="font-size:13px;color:#666;margin-bottom:4px;">Resolved: ${item.resolvedDate || '—'}</div>`;
-                if (item.approved) {
-                    html += `<div style="margin-top:8px;"><span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">APPROVED</span> <a href="mailto:${item.approved.email}" style="margin-left:6px;font-size:13px;">${item.approved.name}</a></div>`;
-                }
-                if (item.denied.length > 0) {
-                    html += `<div style="margin-top:6px;font-size:13px;color:#666;">Denied: ${item.denied.map(d => `<a href="mailto:${d.email}">${d.name}</a>`).join(', ')}</div>`;
-                }
-                if (autoDenied.length > 0) {
-                    html += `<div style="margin-top:10px;border-top:1px solid #f0f0f0;padding-top:10px;">
-                        <div style="font-size:12px;font-weight:600;color:#856404;margin-bottom:6px;">Auto-denied applicants — eligible for re-offer if approved person withdraws:</div>`;
-                    autoDenied.forEach(ad => {
-                        html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-                            <span style="font-size:13px;flex:1;">${ad.name}</span>
-                            <button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="reofferShiftCall('${ad.email}','${ad.name}','${item.date}','${item.jobType}','${item.location}')">Re-offer</button>
-                        </div>`;
-                    });
-                    html += '</div>';
-                }
-                html += '</div>';
-            });
-        }
+        // Cache past for re-sorting, then render
+        pastApprovalsCache = past;
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+            <h4 style="margin:0;">Past Cover Requests</h4>
+            <div style="display:flex;align-items:center;gap:16px;font-size:13px;color:#666;">
+                <span>Sort by:</span>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="pastSort" value="resolved" checked onchange="renderPastSection(this.value)"> Date resolved
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="pastSort" value="shift" onchange="renderPastSection(this.value)"> Shift date
+                </label>
+            </div>
+        </div>
+        <div id="pastApprovalsContainer"></div>`;
 
             container.innerHTML = html;
+            // Render past section with default sort
+            renderPastSection('resolved');
         } catch(err) {
             console.error('renderApprovals error:', err);
             container.innerHTML = '<p style="color: #dc3545; font-weight: bold;">Display error: ' + err.message + '</p>';
         }
     }
 
+
+
+    function parsePastDate(dateStr) {
+        // Parses DD/MM/YYYY or DD/MM/YYYY, HH:MM am/pm
+        if (!dateStr || dateStr === '—') return new Date(0);
+        const datePart = dateStr.split(',')[0].trim();
+        const parts = datePart.split('/');
+        if (parts.length !== 3) return new Date(0);
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+
+    function renderPastSection(sortBy) {
+        const container = document.getElementById('pastApprovalsContainer');
+        if (!container) return;
+        if (pastApprovalsCache.length === 0) {
+            container.innerHTML = '<p style="color:#999;">No resolved requests</p>';
+            return;
+        }
+        const sorted = [...pastApprovalsCache].sort((a, b) => {
+            if (sortBy === 'shift') {
+                return parsePastDate(a.date) - parsePastDate(b.date);
+            } else {
+                return parsePastDate(a.resolvedDate) - parsePastDate(b.resolvedDate);
+            }
+        });
+        let html = '';
+        sorted.forEach(item => {
+            const autoDenied = item.autoDenied || [];
+            html += `<div style="background:white;border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:12px;">
+                <div style="font-weight:600;margin-bottom:8px;">${item.date} - ${item.jobType} @ ${item.location}</div>
+                <div style="font-size:13px;color:#666;margin-bottom:4px;">Resolved: ${item.resolvedDate || '—'}</div>`;
+            if (item.approved) {
+                html += `<div style="margin-top:8px;"><span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">APPROVED</span> <a href="mailto:${item.approved.email}" style="margin-left:6px;font-size:13px;">${item.approved.name}</a></div>`;
+            }
+            if (item.denied && item.denied.length > 0) {
+                html += `<div style="margin-top:6px;font-size:13px;color:#666;">Denied: ${item.denied.map(d => `<a href="mailto:${d.email}">${d.name}</a>`).join(', ')}</div>`;
+            }
+            if (autoDenied.length > 0) {
+                html += `<div style="margin-top:10px;border-top:1px solid #f0f0f0;padding-top:10px;">
+                    <div style="font-size:12px;font-weight:600;color:#856404;margin-bottom:6px;">Auto-denied applicants — eligible for re-offer if approved person withdraws:</div>`;
+                autoDenied.forEach(ad => {
+                    html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                        <span style="font-size:13px;flex:1;">${ad.name}</span>
+                        <button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="reofferShiftCall('${ad.email}','${ad.name}','${item.date}','${item.jobType}','${item.location}')">Re-offer</button>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
 
     function reofferShiftCall(staffEmail, staffName, date, jobType, location) {
         showMessage('Sending re-offer email...', 'info');
@@ -973,6 +1013,7 @@
     }
 
     let pendingBackupRequest = null; // Stores shift list while backup modal is open
+    let pastApprovalsCache = []; // Cache for re-sorting without backend call
 
     function requestShifts() {
         const checkboxes = Array.from(document.querySelectorAll('.shift-checkbox:checked'));
