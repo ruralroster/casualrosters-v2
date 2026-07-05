@@ -380,7 +380,7 @@
                     </div>
                     <div class="settings-section">
                         <h4>AST Qualifications</h4>
-                        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Emergency is always held. Select any additional AST qualifications below.</p>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Select your AST qualifications below.</p>
                         <div id="astList"></div>
                     </div>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
@@ -1294,10 +1294,10 @@
     function loadASTCheckboxes() {
         const container = document.getElementById('astList');
         let html = '';
-        // Emergency is always held — show as fixed, non-interactive
+        // Emergency shown as a normal checkbox — cosmetic only, always included on save
         html += `<div class="location-item">
-            <input type="checkbox" checked disabled style="opacity: 0.5; width: 18px; height: 18px;">
-            <label style="color: #666;">Emergency <span style="font-size: 12px; color: #999;">(always held)</span></label>
+            <input type="checkbox" id="ast-Emergency" checked style="width: 18px; height: 18px;">
+            <label for="ast-Emergency">Emergency</label>
         </div>`;
         AST_QUALS.forEach(qual => {
             const checked = userQuals.includes(qual) ? ' checked' : '';
@@ -1309,11 +1309,12 @@
     // Fix: saves both locations AND AST quals to backend (V1 only saved locations)
     function saveSettings() {
         const locCheckboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
-        const astCheckboxes = document.querySelectorAll('#astList input[type="checkbox"]:checked:not([disabled])');
+        const astCheckboxes = document.querySelectorAll('#astList input[type="checkbox"]:checked');
 
         const newLocations = Array.from(locCheckboxes).map(cb => cb.value);
-        const additionalQuals = Array.from(astCheckboxes).map(cb => cb.value);
-        const newQuals = ['Emergency', ...additionalQuals];
+        const selectedQuals = Array.from(astCheckboxes).map(cb => cb.value);
+        // Always include Emergency regardless of checkbox state — it cannot be removed
+        const newQuals = ['Emergency', ...selectedQuals.filter(q => q !== 'Emergency')];
 
         if (newLocations.length === 0) {
             showMessage('Please select at least one location', 'error');
