@@ -1929,7 +1929,17 @@ function generateICS(date, jobType, location, startTime, endTime, summary) {
     const [sh, sm] = startTime.split(':');
     const [eh, em] = endTime.split(':');
     dtStart = `${dateStr}T${sh.padStart(2,'0')}${sm.padStart(2,'0')}00`;
-    dtEnd   = `${dateStr}T${eh.padStart(2,'0')}${em.padStart(2,'0')}00`;
+
+    // Overnight shift: if end time is earlier than start time, end date is next day
+    const startMins = parseInt(sh) * 60 + parseInt(sm);
+    const endMins   = parseInt(eh) * 60 + parseInt(em);
+    let endDateStr = dateStr;
+    if (endMins <= startMins) {
+      const d = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+      d.setDate(d.getDate() + 1);
+      endDateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    }
+    dtEnd = `${endDateStr}T${eh.padStart(2,'0')}${em.padStart(2,'0')}00`;
   } else {
     // Fall back to all-day event
     dtStart = `${dateStr}`;
