@@ -1636,7 +1636,7 @@
             <div style="margin-bottom:12px;">
                 <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">AST Requirement</label>
                 <select id="newShiftTypeAST" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-                    <option value="">Emergency (no additional AST required)</option>
+                    <option value="">Emergency</option>
                     <option value="Anaesthetics">Anaesthetics</option>
                     <option value="O&G">O&G</option>
                 </select>
@@ -1682,11 +1682,38 @@
         const endTime = document.getElementById('newShiftTypeEnd').value;
         const errEl = document.getElementById('shiftTypeFormError');
 
-        if (!location) { errEl.textContent = 'Please select a location'; errEl.style.display = 'block'; return; }
-        if (!jobType)  { errEl.textContent = 'Please enter a job type name'; errEl.style.display = 'block'; return; }
+        if (!location)   { errEl.textContent = 'Please select a location'; errEl.style.display = 'block'; return; }
+        if (!jobType)    { errEl.textContent = 'Please enter a job type name'; errEl.style.display = 'block'; return; }
+        if (!startTime)  { errEl.textContent = 'Please enter a start time'; errEl.style.display = 'block'; return; }
+        if (!endTime)    { errEl.textContent = 'Please enter an end time'; errEl.style.display = 'block'; return; }
         errEl.style.display = 'none';
 
+        // Check for overnight shift — end time earlier than start time
+        const [sh, sm] = startTime.split(':').map(Number);
+        const [eh, em] = endTime.split(':').map(Number);
+        if (eh * 60 + em < sh * 60 + sm) {
+            document.getElementById('overnightStartDisplay').textContent = startTime;
+            document.getElementById('overnightEndDisplay').textContent = endTime;
+            document.getElementById('overnightModal').classList.add('active');
+            return;
+        }
+
+        submitNewShiftType();
+    }
+
+    function confirmOvernightShiftType(confirmed) {
+        document.getElementById('overnightModal').classList.remove('active');
+        if (confirmed) submitNewShiftType();
+    }
+
+    function submitNewShiftType() {
+        const location = document.getElementById('newShiftTypeLocation').value;
+        const jobType = document.getElementById('newShiftTypeLabel').value.trim();
+        const startTime = document.getElementById('newShiftTypeStart').value;
+        const endTime = document.getElementById('newShiftTypeEnd').value;
         const astRequired = document.getElementById('newShiftTypeAST').value;
+        const errEl = document.getElementById('shiftTypeFormError');
+
         callBackend('addShiftType', {
             officerEmail: currentUser.email, location, jobType, startTime, endTime, astRequired
         }).then(result => {
@@ -1695,10 +1722,11 @@
                 errEl.style.display = 'block';
             } else {
                 showMessage('\u2713 Shift type added', 'success');
-                loadOfficerSettings(); // Reload to show new type in list
+                loadOfficerSettings();
             }
         });
     }
+
 
     function logout() {
         currentUser = null;
@@ -1713,6 +1741,20 @@
         document.getElementById('passwordInput').value = '';
     }
 </script>
+
+<div id="overnightModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Overnight Shift</h3>
+        </div>
+        <p style="margin-bottom:16px;">The end time (<span id="overnightEndDisplay"></span>) is earlier than the start time (<span id="overnightStartDisplay"></span>). This will be saved as an overnight shift ending the following day.</p>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Is that correct?</p>
+        <div class="modal-buttons">
+            <button class="btn-success" onclick="confirmOvernightShiftType(true)">Yes, overnight shift</button>
+            <button class="btn-secondary" onclick="confirmOvernightShiftType(false)">No, go back</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>
