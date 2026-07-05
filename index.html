@@ -224,6 +224,7 @@
     let userRole = null;
     let userLocations = [];
     let userQuals = ['Emergency'];
+    let userPrimaryLocations = []; // Column H — pipe-delimited, subset of userLocations
     let officerLocations = [];
     let pendingDenySwap = null;
     let pendingFortnightSwap = null;
@@ -296,6 +297,7 @@
                 userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
                 // Fix: actually load and store AST quals from login response
                 userQuals = user.astQuals ? user.astQuals.split(',').map(q => q.trim()) : ['Emergency'];
+                userPrimaryLocations = user.primaryLocations ? user.primaryLocations.split('|').map(l => l.trim()).filter(Boolean) : [];
                 showDashboard();
             }
         });
@@ -376,7 +378,18 @@
                     <h3>Settings</h3>
                     <div class="settings-section">
                         <h4>Work Location Preferences</h4>
-                        <div id="locationList"></div>
+                        <div style="display:flex;gap:24px;margin-top:8px;">
+                            <div style="flex:1;">
+                                <p style="font-size:13px;font-weight:600;color:#2c6e6a;margin-bottom:8px;">Primary Workplace</p>
+                                <p style="font-size:12px;color:#666;margin-bottom:10px;">Where you are normally rostered. You can offer shifts from this location for swap.</p>
+                                <div id="primaryLocationList"></div>
+                            </div>
+                            <div style="flex:1;">
+                                <p style="font-size:13px;font-weight:600;color:#2c6e6a;margin-bottom:8px;">Cover Locations</p>
+                                <p style="font-size:12px;color:#666;margin-bottom:10px;">Locations where you can pick up extra shifts.</p>
+                                <div id="locationList"></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="settings-section">
                         <h4>AST Qualifications</h4>
@@ -1109,8 +1122,14 @@
 
     function populateSwapLocations() {
         const select = document.getElementById('swapLocation');
+        if (!select) return;
         select.innerHTML = '<option value="">Select Location</option>';
-        userLocations.forEach(loc => {
+        const swapLocs = userPrimaryLocations.length > 0 ? userPrimaryLocations : [];
+        if (swapLocs.length === 0) {
+            select.innerHTML = '<option value="">Set a primary workplace in Settings first</option>';
+            return;
+        }
+        swapLocs.forEach(loc => {
             const opt = document.createElement('option');
             opt.value = loc;
             opt.textContent = loc;
@@ -1124,15 +1143,21 @@
         if (!location) { jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>'; return; }
         jobTypeSelect.innerHTML = '<option value="">Loading...</option>';
         callBackend('getJobTypesForLocation', { location }).then(result => {
-            jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
-            if (result.jobTypes) {
+            if (result.jobTypes && result.jobTypes.length > 0) {
+                jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
                 result.jobTypes.forEach(jt => {
                     const opt = document.createElement('option');
                     opt.value = jt;
                     opt.textContent = jt;
                     jobTypeSelect.appendChild(opt);
                 });
+            } else if (result.error) {
+                jobTypeSelect.innerHTML = '<option value="">Error loading — try again</option>';
+            } else {
+                jobTypeSelect.innerHTML = '<option value="">No shift types configured for this location</option>';
             }
+        }).catch(() => {
+            jobTypeSelect.innerHTML = '<option value="">Error loading — try again</option>';
         });
     }
 
@@ -1276,19 +1301,50 @@
 
     function loadLocationCheckboxes() {
         const container = document.getElementById('locationList');
-        container.innerHTML = '<p style="color:#999;font-size:13px;">Loading locations...</p>';
+        const primaryContainer = document.getElementById('primaryLocationList');
+        container.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
+        if (primaryContainer) primaryContainer.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
+
         callBackend('getAllLocations', {}).then(locations => {
             if (!locations || locations.length === 0) {
                 container.innerHTML = '<p style="color:#999;font-size:13px;">No locations found.</p>';
+                if (primaryContainer) primaryContainer.innerHTML = '';
                 return;
             }
-            let html = '';
+
+            // Cover locations — checkboxes
+            let coverHtml = '';
             locations.forEach(loc => {
                 const checked = userLocations.includes(loc) ? ' checked' : '';
-                html += `<div class="location-item"><input type="checkbox" id="loc-${loc}" value="${loc}"${checked}><label for="loc-${loc}">${loc}</label></div>`;
+                coverHtml += `<div class="location-item"><input type="checkbox" id="loc-${loc}" value="${loc}"${checked} onchange="onCoverLocationChange()"><label for="loc-${loc}">${loc}</label></div>`;
             });
-            container.innerHTML = html;
+            container.innerHTML = coverHtml;
+
+            // Primary locations — radio buttons (only locations in cover list)
+            if (primaryContainer) {
+                let primaryHtml = '';
+                locations.forEach(loc => {
+                    if (!userLocations.includes(loc)) return; // only show cover locations as primary options
+                    const checked = userPrimaryLocations.includes(loc) ? ' checked' : '';
+                    primaryHtml += `<div class="location-item"><input type="radio" name="primaryLoc" id="primary-${loc}" value="${loc}"${checked}><label for="primary-${loc}">${loc}</label></div>`;
+                });
+                primaryContainer.innerHTML = primaryHtml || '<p style="color:#999;font-size:13px;">Select cover locations first.</p>';
+            }
         });
+    }
+
+    // Re-render primary radio buttons when cover checkboxes change
+    function onCoverLocationChange() {
+        const primaryContainer = document.getElementById('primaryLocationList');
+        if (!primaryContainer) return;
+        const checkedCovers = Array.from(document.querySelectorAll('#locationList input[type="checkbox"]:checked')).map(cb => cb.value);
+        const currentPrimary = document.querySelector('input[name="primaryLoc"]:checked')?.value || '';
+        let html = '';
+        checkedCovers.forEach(loc => {
+            const checked = (loc === currentPrimary) ? ' checked' : '';
+            html += `<div class="location-item"><input type="radio" name="primaryLoc" id="primary-${loc}" value="${loc}"${checked}><label for="primary-${loc}">${loc}</label></div>`;
+        });
+        primaryContainer.innerHTML = html || '<p style="color:#999;font-size:13px;">Select cover locations first.</p>';
     }
 
     function loadASTCheckboxes() {
@@ -1306,15 +1362,16 @@
         container.innerHTML = html;
     }
 
-    // Fix: saves both locations AND AST quals to backend (V1 only saved locations)
+    // Fix: saves locations, primary location, and AST quals to backend
     function saveSettings() {
         const locCheckboxes = document.querySelectorAll('#locationList input[type="checkbox"]:checked');
         const astCheckboxes = document.querySelectorAll('#astList input[type="checkbox"]:checked');
+        const primaryRadio = document.querySelector('input[name="primaryLoc"]:checked');
 
         const newLocations = Array.from(locCheckboxes).map(cb => cb.value);
         const selectedQuals = Array.from(astCheckboxes).map(cb => cb.value);
-        // Always include Emergency regardless of checkbox state — it cannot be removed
         const newQuals = ['Emergency', ...selectedQuals.filter(q => q !== 'Emergency')];
+        const newPrimary = primaryRadio ? primaryRadio.value : '';
 
         if (newLocations.length === 0) {
             showMessage('Please select at least one location', 'error');
@@ -1322,6 +1379,14 @@
         }
         if (newQuals.length === 0) {
             showMessage('Please select at least one AST qualification', 'error');
+            return;
+        }
+        if (!newPrimary) {
+            showMessage('Please select a primary workplace', 'error');
+            return;
+        }
+        if (!newLocations.includes(newPrimary)) {
+            showMessage('Primary workplace must be one of your cover locations', 'error');
             return;
         }
 
@@ -1344,10 +1409,20 @@
             } else if (astResult.error) {
                 showMessage('Error saving AST qualifications: ' + astResult.error, 'error');
             } else {
-                userLocations = newLocations;
-                userQuals = newQuals;
-                showMessage('✓ Settings saved', 'success');
-                populateSwapLocations();
+                callBackend('updateUserPrimaryLocations', {
+                    email: currentUser.email,
+                    primaryLocations: newPrimary
+                }).then(primResult => {
+                    if (primResult.error) {
+                        showMessage('Error saving primary location: ' + primResult.error, 'error');
+                    } else {
+                        userLocations = newLocations;
+                        userQuals = newQuals;
+                        userPrimaryLocations = [newPrimary];
+                        showMessage('\u2713 Settings saved', 'success');
+                        populateSwapLocations();
+                    }
+                });
             }
         });
     }
@@ -1733,6 +1808,7 @@
         userRole = null;
         userLocations = [];
         userQuals = ['Emergency'];
+        userPrimaryLocations = [];
         const banner = document.getElementById('pendingBanner');
         if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
         document.getElementById('mainDashboard').style.display = 'none';
