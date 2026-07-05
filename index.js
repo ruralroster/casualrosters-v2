@@ -110,7 +110,8 @@ const server = http.createServer((req, res) => {
         case 'proposeSwap':               result = await proposeSwap(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.date, params.jobType, params.location, params.offeredDate, params.offeredJobType); break;
         case 'approveSwapProposal':       result = await approveSwapProposal(params.claimingEmail, params.claimingName, params.originalEmail, params.originalName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.offeredDate, params.offeredJobType, params.sendEmail !== false); break;
         case 'denySwapProposal':          result = await denySwapProposal(params.claimingEmail, params.claimingName, params.officerEmail, params.officerName, params.date, params.jobType, params.location, params.sendEmail !== false); break;
-        case 'updateUserLocations':       result = await updateUserLocations(params.email, params.locations, params.role); break;
+        case 'updateUserLocations':             result = await updateUserLocations(params.email, params.locations, params.role); break;
+        case 'updateUserPrimaryLocations':      result = await updateUserPrimaryLocations(params.email, params.primaryLocations); break;
         case 'updateUserAST':             result = await updateUserAST(params.email, params.astQuals); break;
         case 'countPendingRequests':      result = await countPendingRequests(params.email); break;
         case 'getPendingCounts':           result = await getPendingCounts(params.email); break;
@@ -142,7 +143,7 @@ async function checkUserExists(email, password) {
   try {
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Users!A2:G'
+      range: 'Users!A2:H'
     });
 
     const rows = result.data.values || [];
@@ -163,7 +164,8 @@ async function checkUserExists(email, password) {
           name: row[1],
           locations: row[2],
           role: rowRole,
-          astQuals: row[6] || 'Emergency'
+          astQuals: row[6] || 'Emergency',
+          primaryLocations: row[7] || ''
         };
       }
     }
@@ -1398,7 +1400,7 @@ async function getOfficerSwapProposals(email) {
     // Build AST quals map from Users sheet for both parties
     const usersResult = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Users!A2:G'
+      range: 'Users!A2:H'
     });
     const usersMap = {};
     for (let row of (usersResult.data.values || [])) {
@@ -1532,7 +1534,7 @@ async function updateUserLocations(email, locations, role) {
     const normalizedEmail = email.toLowerCase().trim();
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Users!A2:G'
+      range: 'Users!A2:H'
     });
     const rows = result.data.values || [];
     for (let i = 0; i < rows.length; i++) {
@@ -1559,7 +1561,7 @@ async function updateUserAST(email, astQuals) {
     const normalizedEmail = email.toLowerCase().trim();
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Users!A2:G'
+      range: 'Users!A2:H'
     });
     const rows = result.data.values || [];
     for (let i = 0; i < rows.length; i++) {
@@ -1892,6 +1894,34 @@ async function getAllLocations() {
   } catch (err) {
     console.error('getAllLocations error:', err.message);
     return [];
+  }
+}
+
+
+async function updateUserPrimaryLocations(email, primaryLocations) {
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:H'
+    });
+    const rows = result.data.values || [];
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).toLowerCase().trim() === normalizedEmail) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Users!H${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[primaryLocations]] }
+        });
+        console.log(`Updated primary locations for ${email}: ${primaryLocations}`);
+        return { success: true };
+      }
+    }
+    return { error: 'User not found' };
+  } catch (err) {
+    console.error('updateUserPrimaryLocations error:', err);
+    return { error: err.toString() };
   }
 }
 
