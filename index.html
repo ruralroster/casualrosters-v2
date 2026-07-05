@@ -1320,6 +1320,10 @@
             showMessage('Please select at least one location', 'error');
             return;
         }
+        if (newQuals.length === 0) {
+            showMessage('Please select at least one AST qualification', 'error');
+            return;
+        }
 
         showMessage('Saving settings...', 'info');
 
