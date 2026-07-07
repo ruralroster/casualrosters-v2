@@ -23,7 +23,7 @@ const SERVICE_ACCOUNT = {
 };
 
 const GMAIL_USER = 'ruralroster@gmail.com';
-const GMAIL_APP_PASSWORD = 'gckg msat pnzq ltug';
+const GMAIL_APP_PASSWORD = 'tzjq dfrs mgih zegy';
 
 // STAGING Sheet ID
 const SHEET_ID = '1VPj0f0KPisbr3zTexse_FFsCw4lGMIQCLzMOkEPc6dw';
