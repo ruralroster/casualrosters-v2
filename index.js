@@ -1125,7 +1125,10 @@ async function approvePendingSwap(staffEmail, staffName, date, jobType, location
     const listingsRows = listingsResponse.data.values || [];
     let availableDays = '';
     for (let i = 0; i < listingsRows.length; i++) {
-      if (listingsRows[i][0] === staffEmail && listingsRows[i][2] === date && listingsRows[i][3] === jobType && listingsRows[i][4] === location) {
+      if (String(listingsRows[i][0]).trim() === String(staffEmail).trim() &&
+          normaliseDate(String(listingsRows[i][2]).trim()) === normaliseDate(String(date).trim()) &&
+          String(listingsRows[i][3]).trim() === String(jobType).trim() &&
+          String(listingsRows[i][4]).trim() === String(location).trim()) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
           range: `Marketplace Listings!F${i + 2}`,
@@ -1133,13 +1136,17 @@ async function approvePendingSwap(staffEmail, staffName, date, jobType, location
           resource: { values: [['Available']] }
         });
         availableDays = listingsRows[i][7] || '';
+        console.log(`approvePendingSwap: updated row ${i+2} to Available`);
         break;
       }
     }
+    if (!availableDays && availableDays !== '') {
+      console.warn(`approvePendingSwap: no matching row found for ${staffEmail} ${date} ${jobType} @ ${location}`);
+    }
     await transporter.sendMail({
-      from: GMAIL_USER, to: staffEmail, cc: 'ruralroster@gmail.com',
+      from: GMAIL_USER, to: staffEmail, cc: GMAIL_USER,
       subject: `[Rural Rosters] Your Swap Approved`,
-      html: `<p>Dear ${staffName},</p><p>Your swap request has been approved and is now live on the marketplace!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Available days/shifts: ${availableDays}</p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
+      html: `<p>Dear ${staffName},</p><p>Your swap request has been approved and is now live on the marketplace!</p><p><strong>${date} - ${jobType} @ ${location}</strong></p><p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
     });
     return { success: true, message: 'Swap approved and moved to marketplace' };
   } catch (err) {
@@ -1156,7 +1163,10 @@ async function denySwapWithReason(staffEmail, staffName, date, jobType, location
     });
     const listingsRows = listingsResponse.data.values || [];
     for (let i = 0; i < listingsRows.length; i++) {
-      if (listingsRows[i][0] === staffEmail && listingsRows[i][2] === date && listingsRows[i][3] === jobType && listingsRows[i][4] === location) {
+      if (String(listingsRows[i][0]).trim() === String(staffEmail).trim() &&
+          normaliseDate(String(listingsRows[i][2]).trim()) === normaliseDate(String(date).trim()) &&
+          String(listingsRows[i][3]).trim() === String(jobType).trim() &&
+          String(listingsRows[i][4]).trim() === String(location).trim()) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
           range: `Marketplace Listings!F${i + 2}`,
@@ -1452,10 +1462,10 @@ async function removeFromMarketplace(staffEmail, staffName, date, jobType, locat
     const listingsRows = listingsResponse.data.values || [];
     for (let i = 0; i < listingsRows.length; i++) {
       if (
-        listingsRows[i][0] === staffEmail &&
-        listingsRows[i][2] === date &&
-        listingsRows[i][3] === jobType &&
-        listingsRows[i][4] === location &&
+        String(listingsRows[i][0]).trim() === String(staffEmail).trim() &&
+        normaliseDate(String(listingsRows[i][2]).trim()) === normaliseDate(String(date).trim()) &&
+        String(listingsRows[i][3]).trim() === String(jobType).trim() &&
+        String(listingsRows[i][4]).trim() === String(location).trim() &&
         String(listingsRows[i][5]).trim() === 'Available'
       ) {
         await sheets.spreadsheets.values.update({
@@ -1617,9 +1627,10 @@ async function getPendingCounts(email) {
     let shiftRequests = 0;
     let swapProposals = 0;
 
-    const [requestsResponse, claimsResponse] = await Promise.all([
+    const [requestsResponse, claimsResponse, listingsResponse] = await Promise.all([
       sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Requests!A2:G' }),
-      sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:M' })
+      sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Claims!A2:M' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Marketplace Listings!A2:F' })
     ]);
 
     for (let row of (requestsResponse.data.values || [])) {
@@ -1636,7 +1647,14 @@ async function getPendingCounts(email) {
       }
     }
 
-    return { shiftRequests, swapProposals };
+    let swapListings = 0;
+    for (let row of (listingsResponse.data.values || [])) {
+      if (row[4] && locations.includes(String(row[4]).trim()) && String(row[5] || '').trim() === 'Pending Verification') {
+        swapListings++;
+      }
+    }
+
+    return { shiftRequests, swapProposals, swapListings };
   } catch (err) {
     console.error('getPendingCounts error:', err);
     return { shiftRequests: 0, swapProposals: 0 };
