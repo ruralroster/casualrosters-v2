@@ -65,7 +65,7 @@
         .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
         .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
         .modal-header h3 { margin: 0; }
-        .info-icon { background: none; border: 2px solid #aaa; border-radius: 50%; width: 28px; height: 28px; font-size: 14px; cursor: pointer; color: #666; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .info-icon { background: none; border: 2px solid #aaa; border-radius: 50%; width: 28px; height: 28px; font-size: 14px; font-style: italic; font-weight: 700; cursor: pointer; color: #666; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; }
         .info-icon:hover { border-color: #2c3e50; color: #2c3e50; }
         .modal-help { display: none; background: #f0f9ff; border: 1px solid #bee5eb; border-radius: 4px; padding: 10px 14px; font-size: 13px; color: #0c5460; margin-bottom: 16px; line-height: 1.5; }
         .modal-help.visible { display: block; }
@@ -117,7 +117,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Deny Swap Request</h3>
-            <button class="info-icon" onclick="toggleModalHelp('denySwapHelp')" title="What is this?">👁</button>
+            <button class="info-icon" onclick="toggleModalHelp('denySwapHelp')" title="What is this?">i</button>
         </div>
         <div id="denySwapHelp" class="modal-help">
             Use this to decline a swap request. Your reason will be emailed directly to the staff member so they understand why it was not approved. Be clear and professional — this message goes to them verbatim.
@@ -135,7 +135,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Shifts Already Applied For</h3>
-            <button class="info-icon" onclick="toggleModalHelp('backupHelp')" title="What is this?">👁</button>
+            <button class="info-icon" onclick="toggleModalHelp('backupHelp')" title="What is this?">i</button>
         </div>
         <div id="backupHelp" class="modal-help">
             These shifts already have applications from another staff member awaiting officer approval. You can still apply — your application will be held as a backup in case the first applicant is denied.
@@ -152,7 +152,13 @@
 
 <div id="fortnightModal" class="modal">
     <div class="modal-content">
-        <h3>Select Available Days for Swap</h3>
+        <div class="modal-header">
+            <h3>Select Available Days for Swap</h3>
+            <button class="info-icon" onclick="toggleModalHelp('fortnightHelp')" title="What is this?">i</button>
+        </div>
+        <div id="fortnightHelp" class="modal-help">
+            Select the days in this pay fortnight when you are free to work in exchange for the shift you are offering. The other staff member will see these dates when considering your swap listing. You must select at least one day or night.
+        </div>
         <p>Check which days in this fortnight you can work:</p>
         <div id="fortnightGrid"></div>
         <div id="fortnightError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
@@ -168,7 +174,7 @@
     <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
         <div class="modal-header">
             <h3>Propose Shift Swap</h3>
-            <button class="info-icon" onclick="toggleModalHelp('proposalHelp')" title="What is this?">👁</button>
+            <button class="info-icon" onclick="toggleModalHelp('proposalHelp')" title="What is this?">i</button>
         </div>
         <div id="proposalHelp" class="modal-help">
             You are proposing to swap shifts with the person who listed the shift above. Select one of the dates they are available to cover — this must be a shift you are currently rostered to work and are willing to give up. Select the job type of that shift. Both parties will be notified by email, and the swap still requires officer approval before it is confirmed.
@@ -1443,8 +1449,8 @@
         callBackend('getPendingCounts', { email: currentUser.email }).then(counts => {
             const banner = document.getElementById('pendingBanner');
             if (!banner) return;
-            const { shiftRequests, swapProposals } = counts;
-            if (!shiftRequests && !swapProposals) {
+            const { shiftRequests, swapProposals, swapListings } = counts;
+            if (!shiftRequests && !swapProposals && !swapListings) {
                 banner.style.display = 'none';
                 banner.innerHTML = '';
                 return;
@@ -1452,6 +1458,10 @@
             let items = '';
             if (shiftRequests > 0) {
                 items += `<span class="banner-item"><span class="banner-dot"></span>${shiftRequests} pending shift cover request${shiftRequests > 1 ? 's' : ''}</span>`;
+            }
+            if (swapListings > 0) {
+                if (items) items += '<span style="color:#ccc;">|</span>';
+                items += `<span class="banner-item"><span class="banner-dot"></span>${swapListings} shift swap listing${swapListings > 1 ? 's' : ''} awaiting review</span>`;
             }
             if (swapProposals > 0) {
                 if (items) items += '<span style="color:#ccc;">|</span>';
