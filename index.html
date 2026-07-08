@@ -187,6 +187,7 @@
         <select id="proposalJobType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 20px;">
             <option value="">Select Job Type</option>
         </select>
+        <div id="proposalError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:14px;"></div>
         <div class="modal-buttons">
             <button class="btn-primary" onclick="submitSwapProposal()">Offer to Take Swap</button>
             <button class="btn-secondary" onclick="closeProposalModal()">Cancel</button>
@@ -733,6 +734,35 @@
         container.innerHTML = html;
     }
 
+
+    function renderPastSwapSection(sortBy) {
+        const container = document.getElementById('pastSwapProposalsContainer');
+        if (!container) return;
+        if (!pastSwapProposalsCache || pastSwapProposalsCache.length === 0) {
+            container.innerHTML = '<p style="color:#999;">No resolved swap proposals</p>';
+            return;
+        }
+        const sorted = [...pastSwapProposalsCache].sort((a, b) => {
+            if (sortBy === 'shift') return parsePastDate(a.date) - parsePastDate(b.date);
+            return parsePastDate(a.resolvedTimestamp) - parsePastDate(b.resolvedTimestamp);
+        });
+        let html = '<table><tr><th>Resolved</th><th>Proposed By</th><th>Shift Taken</th><th>In Return</th><th>Status</th></tr>';
+        sorted.forEach(p => {
+            const statusBadge = p.status === 'APPROVED'
+                ? `<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">Approved</span>`
+                : `<span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">Denied</span>`;
+            html += `<tr>
+                <td style="font-size:13px;white-space:nowrap;">${p.resolvedTimestamp}</td>
+                <td style="font-size:13px;">${p.claimingName}</td>
+                <td style="font-size:13px;">${p.date} - ${p.jobType} @ ${p.location}<br><span style="color:#666;font-size:12px;">from ${p.originalName}</span></td>
+                <td style="font-size:13px;">${p.offeredDate} - ${p.offeredJobType}</td>
+                <td>${statusBadge}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    }
+
     function reofferShiftCall(staffEmail, staffName, date, jobType, location) {
         showMessage('Sending re-offer email...', 'info');
         callBackend('reofferShift', {
@@ -904,27 +934,23 @@
 
 
         // ── Section 4: Past Swap Proposals ───────────────────
-        html += '<h4 style="margin-top: 28px; margin-bottom: 12px;">Past Swap Proposals</h4>';
-        if (!pastProposals || pastProposals.length === 0) {
-            html += '<p style="color: #999;">No resolved swap proposals</p>';
-        } else {
-            html += '<table><tr><th>Resolved</th><th>Proposed By</th><th>Shift Taken</th><th>In Return</th><th>Status</th></tr>';
-            pastProposals.forEach(p => {
-                const statusBadge = p.status === 'APPROVED'
-                    ? `<span style="background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">Approved</span>`
-                    : `<span style="background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">Denied</span>`;
-                html += `<tr>
-                    <td style="font-size: 13px; white-space: nowrap;">${p.resolvedTimestamp}</td>
-                    <td style="font-size: 13px;">${p.claimingName}</td>
-                    <td style="font-size: 13px;">${p.date} - ${p.jobType} @ ${p.location}<br><span style="color:#666; font-size:12px;">from ${p.originalName}</span></td>
-                    <td style="font-size: 13px;">${p.offeredDate} - ${p.offeredJobType}</td>
-                    <td>${statusBadge}</td>
-                </tr>`;
-            });
-            html += '</table>';
-        }
+        pastSwapProposalsCache = pastProposals || [];
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:28px;margin-bottom:12px;">
+            <h4 style="margin:0;">Past Swap Proposals</h4>
+            <div style="display:flex;align-items:center;gap:16px;font-size:13px;color:#666;">
+                <span>Sort by:</span>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="swapSort" value="resolved" checked onchange="renderPastSwapSection(this.value)"> Date resolved
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="swapSort" value="shift" onchange="renderPastSwapSection(this.value)"> Shift date
+                </label>
+            </div>
+        </div>
+        <div id="pastSwapProposalsContainer"></div>`;
 
         container.innerHTML = html;
+        renderPastSwapSection('resolved');
     }
 
     function pullBackFromMarketplace(email, name, date, jobType, location) {
@@ -1036,6 +1062,7 @@
 
     let pendingBackupRequest = null; // Stores shift list while backup modal is open
     let pastApprovalsCache = []; // Cache for re-sorting without backend call
+    let pastSwapProposalsCache = []; // Cache for swap proposals sort
 
     function requestShifts() {
         const checkboxes = Array.from(document.querySelectorAll('.shift-checkbox:checked'));
@@ -1076,6 +1103,14 @@
         if (!pendingBackupRequest) return;
         const { allShifts, normalShifts, pendingShifts, checkboxes } = pendingBackupRequest;
         pendingBackupRequest = null;
+
+        if (!includeBackup) {
+            // Uncheck the greyed (pending) shift checkboxes since user skipped them
+            checkboxes.forEach(cb => {
+                if (cb.getAttribute('data-pending') === 'true') cb.checked = false;
+            });
+        }
+
         const shiftsToSubmit = includeBackup ? allShifts : normalShifts;
         if (shiftsToSubmit.length === 0) {
             showMessage('No shifts submitted.', 'info');
@@ -1572,6 +1607,8 @@
 
     function closeProposalModal() {
         document.getElementById('proposalModal').classList.remove('active');
+        const err = document.getElementById('proposalError');
+        if (err) { err.style.display = 'none'; err.textContent = ''; }
         pendingProposal = null;
     }
 
@@ -1581,12 +1618,16 @@
         const selectedDate = document.querySelector('input[name="proposalDate"]:checked');
         const jobType = document.getElementById('proposalJobType').value;
 
+        const proposalErrEl = document.getElementById('proposalError');
+        const showProposalError = (msg) => { if (proposalErrEl) { proposalErrEl.textContent = msg; proposalErrEl.style.display = 'block'; } };
+        if (proposalErrEl) proposalErrEl.style.display = 'none';
+
         if (!selectedDate) {
-            showMessage('Please select a date you are currently working which you are willing to swap for the above shift', 'error');
+            showProposalError('Please select a date you are currently working which you are willing to swap for the above shift');
             return;
         }
         if (!jobType) {
-            showMessage('Please select the job type of the shift you are offering', 'error');
+            showProposalError('Please select the job type of the shift you are offering');
             return;
         }
 
@@ -1755,99 +1796,4 @@
                         <td style="padding:8px;font-size:13px;">${t.jobType}</td>
                         <td style="padding:8px;font-size:13px;color:#666;">${t.startTime || '—'}</td>
                         <td style="padding:8px;font-size:13px;color:#666;">${t.endTime || '—'}</td>
-                        <td style="padding:8px;font-size:13px;color:#666;">${t.astRequired || 'Emergency'}</td>
-                    </tr>`;
-                }
-                html += '</table></div>';
-            }
-        } else {
-            html += '<p style="color:#999;font-size:13px;">No shift types found for your locations.</p>';
-        }
-
-        container.innerHTML = html;
-    }
-
-    function saveNewShiftType() {
-        const location = document.getElementById('newShiftTypeLocation').value;
-        const jobType = document.getElementById('newShiftTypeLabel').value.trim();
-        const startTime = document.getElementById('newShiftTypeStart').value;
-        const endTime = document.getElementById('newShiftTypeEnd').value;
-        const errEl = document.getElementById('shiftTypeFormError');
-
-        if (!location)   { errEl.textContent = 'Please select a location'; errEl.style.display = 'block'; return; }
-        if (!jobType)    { errEl.textContent = 'Please enter a job type name'; errEl.style.display = 'block'; return; }
-        if (!startTime)  { errEl.textContent = 'Please enter a start time'; errEl.style.display = 'block'; return; }
-        if (!endTime)    { errEl.textContent = 'Please enter an end time'; errEl.style.display = 'block'; return; }
-        errEl.style.display = 'none';
-
-        // Check for overnight shift — end time earlier than start time
-        const [sh, sm] = startTime.split(':').map(Number);
-        const [eh, em] = endTime.split(':').map(Number);
-        if (eh * 60 + em < sh * 60 + sm) {
-            document.getElementById('overnightStartDisplay').textContent = startTime;
-            document.getElementById('overnightEndDisplay').textContent = endTime;
-            document.getElementById('overnightModal').classList.add('active');
-            return;
-        }
-
-        submitNewShiftType();
-    }
-
-    function confirmOvernightShiftType(confirmed) {
-        document.getElementById('overnightModal').classList.remove('active');
-        if (confirmed) submitNewShiftType();
-    }
-
-    function submitNewShiftType() {
-        const location = document.getElementById('newShiftTypeLocation').value;
-        const jobType = document.getElementById('newShiftTypeLabel').value.trim();
-        const startTime = document.getElementById('newShiftTypeStart').value;
-        const endTime = document.getElementById('newShiftTypeEnd').value;
-        const astRequired = document.getElementById('newShiftTypeAST').value;
-        const errEl = document.getElementById('shiftTypeFormError');
-
-        callBackend('addShiftType', {
-            officerEmail: currentUser.email, location, jobType, startTime, endTime, astRequired
-        }).then(result => {
-            if (result.error) {
-                errEl.textContent = result.error;
-                errEl.style.display = 'block';
-            } else {
-                showMessage('\u2713 Shift type added', 'success');
-                loadOfficerSettings();
-            }
-        });
-    }
-
-
-    function logout() {
-        currentUser = null;
-        userRole = null;
-        userLocations = [];
-        userQuals = ['Emergency'];
-        userPrimaryLocations = [];
-        const banner = document.getElementById('pendingBanner');
-        if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
-        document.getElementById('mainDashboard').style.display = 'none';
-        document.getElementById('loginScreen').style.display = 'flex';
-        document.getElementById('emailInput').value = '';
-        document.getElementById('passwordInput').value = '';
-    }
-</script>
-
-<div id="overnightModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Overnight Shift</h3>
-        </div>
-        <p style="margin-bottom:16px;">The end time (<span id="overnightEndDisplay"></span>) is earlier than the start time (<span id="overnightStartDisplay"></span>). This will be saved as an overnight shift ending the following day.</p>
-        <p style="font-size:13px;color:#666;margin-bottom:16px;">Is that correct?</p>
-        <div class="modal-buttons">
-            <button class="btn-success" onclick="confirmOvernightShiftType(true)">Yes, overnight shift</button>
-            <button class="btn-secondary" onclick="confirmOvernightShiftType(false)">No, go back</button>
-        </div>
-    </div>
-</div>
-
-</body>
-</html>
+                        <td style="padding:8px;font-size:13px;color:#666;">${t.astRequired || 'Emergency'}<
