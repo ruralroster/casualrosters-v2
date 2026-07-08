@@ -582,10 +582,10 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
       const rowJobType = String(requestsRows[i][4]||'').trim();
       const rowLocation = String(requestsRows[i][5]||'').trim();
 
-      if (rowEmail !== email &&
+      if (rowEmail !== String(email).trim() &&
           rowDate === normDate &&
-          rowJobType === jobType &&
-          rowLocation === location &&
+          rowJobType === String(jobType).trim() &&
+          rowLocation === String(location).trim() &&
           (st === 'PENDING' || st === 'BACKUP' || st === 'RE-OFFERED')) {
         console.log(`Auto-denying row ${i+2}: ${requestsRows[i][2]} (${rowEmail}) status=${st}`);
         await sheets.spreadsheets.values.update({
