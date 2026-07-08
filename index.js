@@ -556,10 +556,10 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
     // 1. Approve the target row
     for (let i = 0; i < requestsRows.length; i++) {
       const st = String(requestsRows[i][6]||'').toUpperCase();
-      if (requestsRows[i][1] === email &&
-          normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date) &&
-          String(requestsRows[i][4]||'').trim() === jobType &&
-          String(requestsRows[i][5]||'').trim() === location &&
+      if (requestsRows[i][1] === email.trim() &&
+          normaliseDate(String(requestsRows[i][3]||'').trim()) === normaliseDate(date.trim()) &&
+          String(requestsRows[i][4]||'').trim() === jobType.trim() &&
+          String(requestsRows[i][5]||'').trim() === location.trim() &&
           (st === 'PENDING' || st === 'BACKUP' || st === 'RE-OFFERED')) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
@@ -574,7 +574,8 @@ async function approveShiftRequest(email, name, date, jobType, location, sendEma
     // 2. Auto-deny all other Pending/Backup/Re-offered applicants for the same shift
     // Uses the original requestsRows read (pre-approval) which reliably has Backup rows
     const autoDeniedApplicants = [];
-    const normDate = normaliseDate(date);
+    const normDate = normaliseDate(date.trim());
+    console.log(`approveShiftRequest: auto-deny scan — approved=${email.trim()}, date=${normDate}, job=${jobType.trim()}, loc=${location.trim()}, total rows=${requestsRows.length}`);
     for (let i = 0; i < requestsRows.length; i++) {
       const st = String(requestsRows[i][6]||'').toUpperCase();
       const rowEmail = String(requestsRows[i][1]||'').trim();
